@@ -18,7 +18,15 @@ const AppNavigator = () => {
     <NavigationContainer
       theme={{
         ...baseTheme,
-        colors: { ...baseTheme.colors, background: theme.colors.background, primary: theme.colors.primary },
+        colors: {
+          ...baseTheme.colors,
+          background: theme.colors.background,
+          primary: theme.colors.primary,
+          card: theme.colors.surface,
+          text: theme.colors.onSurface,
+          border: theme.colors.outlineVariant,
+          notification: theme.colors.primary,
+        },
       }}
     >
       <Stack.Navigator

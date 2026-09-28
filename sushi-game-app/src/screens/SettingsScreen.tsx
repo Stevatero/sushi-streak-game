@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Switch, Modal, TouchableOpacity, ScrollView, Alert, Linking } from 'react-native';
-import { useTheme, Button, IconButton, Divider, SegmentedButtons, Snackbar } from 'react-native-paper';
+import { View, Text, StyleSheet, Switch, Pressable, ScrollView, Alert, Linking } from 'react-native';
+import { SegmentedButtons, Snackbar } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
@@ -11,14 +12,53 @@ import { shareService } from '../services/shareService';
 import { preferences, ThemePreference } from '../services/preferences';
 import { APP_VARIANT, APP_VERSION, PRIVACY_POLICY_URL } from '../config';
 import { logger } from '../utils/logger';
+import { fonts, radii, typography, useAppTheme } from '../theme/theme';
+import AppButton from '../components/ui/AppButton';
+import Panel from '../components/ui/Panel';
+import ScreenHeader from '../components/ui/ScreenHeader';
+import SectionTitle from '../components/ui/SectionTitle';
+import Sheet from '../components/ui/Sheet';
+
+type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+
+interface RowProps {
+  icon: IconName;
+  title: string;
+  subtitle?: string;
+  right?: React.ReactNode;
+  onPress?: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+}
+
+const SettingRow: React.FC<RowProps> = ({ icon, title, subtitle, right, onPress, danger, disabled }) => {
+  const { colors } = useAppTheme();
+  const tint = danger ? colors.error : colors.onSurface;
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress || disabled}
+      accessibilityRole={onPress ? 'button' : undefined}
+      style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surfaceVariant }]}
+    >
+      <View style={[styles.rowIcon, { backgroundColor: danger ? colors.errorContainer : colors.surfaceVariant }]}>
+        <MaterialCommunityIcons name={icon} size={20} color={danger ? colors.onErrorContainer : colors.onSurface} />
+      </View>
+      <View style={styles.rowText}>
+        <Text style={[styles.rowTitle, { color: tint, opacity: disabled ? 0.5 : 1 }]}>{title}</Text>
+        {subtitle ? <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>{subtitle}</Text> : null}
+      </View>
+      {right ?? (onPress ? <MaterialCommunityIcons name="chevron-right" size={22} color={colors.outline} /> : null)}
+    </Pressable>
+  );
+};
 
 const SettingsScreen = () => {
   const navigation = useNavigation();
-  const theme = useTheme();
+  const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const { isDarkMode, preference, setPreference } = useColorScheme();
+  const { preference, setPreference } = useColorScheme();
   const [soundEnabled, setSoundEnabled] = useState(SoundManager.isSoundEnabled());
-  const [creditsVisible, setCreditsVisible] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
   const [snackbar, setSnackbar] = useState('');
 
@@ -90,370 +130,176 @@ const SettingsScreen = () => {
   };
 
   return (
-    <ScrollView
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={{ paddingTop: insets.top, paddingBottom: 40 + insets.bottom }}
-    >
-      <Text style={[styles.title, { color: theme.colors.primary }]}>Impostazioni</Text>
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <ScrollView contentContainerStyle={{ paddingTop: insets.top + 8, paddingBottom: 40 + insets.bottom }}>
+        <ScreenHeader title="Impostazioni" kanji="設定" onBack={() => navigation.goBack()} backIcon="close" />
 
-      {/* Aspetto */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>Aspetto</Text>
-        <SegmentedButtons
-          value={preference}
-          onValueChange={(value) => setPreference(value as ThemePreference)}
-          buttons={[
-            { value: 'system', label: 'Sistema', icon: 'theme-light-dark' },
-            { value: 'light', label: 'Chiaro', icon: 'white-balance-sunny' },
-            { value: 'dark', label: 'Scuro', icon: 'weather-night' },
-          ]}
-        />
-      </View>
-
-      <Divider style={styles.divider} />
-
-      {/* Audio */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>Audio</Text>
-        <View style={styles.settingRow}>
-          <Text style={{ color: theme.colors.onSurface, fontSize: 16 }}>Suoni</Text>
-          <View style={styles.switchContainer}>
-            <Text style={styles.switchLabel}>{soundEnabled ? '🔊' : '🔇'}</Text>
-            <Switch
-              value={soundEnabled}
-              onValueChange={toggleSound}
-              style={styles.switch}
-              ios_backgroundColor={theme.colors.surface}
-              trackColor={{ false: '#767577', true: theme.colors.primaryContainer }}
+        <View style={styles.content}>
+          <SectionTitle label="Aspetto" kanji="外観" />
+          <Panel style={styles.panel}>
+            <SegmentedButtons
+              value={preference}
+              onValueChange={(value) => setPreference(value as ThemePreference)}
+              buttons={[
+                { value: 'system', label: 'Sistema' },
+                { value: 'light', label: 'Chiaro' },
+                { value: 'dark', label: 'Scuro' },
+              ]}
             />
-          </View>
+          </Panel>
+
+          <SectionTitle label="Audio" kanji="音" />
+          <Panel style={[styles.panel, styles.listPanel]}>
+            <SettingRow
+              icon={soundEnabled ? 'volume-high' : 'volume-off'}
+              title="Suoni"
+              subtitle="Effetti quando aggiungi un pezzo e a fine partita"
+              onPress={toggleSound}
+              right={
+                <Switch
+                  value={soundEnabled}
+                  onValueChange={toggleSound}
+                  accessibilityLabel="Suoni"
+                  thumbColor={soundEnabled ? colors.primary : colors.surface}
+                  trackColor={{ false: colors.outline, true: colors.primaryContainer }}
+                  ios_backgroundColor={colors.outline}
+                />
+              }
+            />
+          </Panel>
+
+          {/* Condivisione sessione, solo se c'è una partita in corso */}
+          {sessionId ? (
+            <>
+              <SectionTitle label="Sessione" kanji="対局" />
+              <Panel style={[styles.panel, styles.listPanel]}>
+                <SettingRow
+                  icon="share-variant"
+                  title={`Invita amici · ${sessionName || sessionId}`}
+                  subtitle={
+                    canShare ? `Codice ${sessionId}` : gameEnded ? 'Sessione terminata' : 'Condivisione non disponibile'
+                  }
+                  onPress={() => setShowShareModal(true)}
+                  disabled={!canShare}
+                />
+              </Panel>
+            </>
+          ) : null}
+
+          <SectionTitle label="Privacy" kanji="個人情報" />
+          <Panel style={[styles.panel, styles.listPanel]}>
+            <SettingRow
+              icon="shield-account-outline"
+              title="Informativa sulla privacy"
+              subtitle="Nessun account, niente pubblicità o tracciamento"
+              onPress={openPrivacyPolicy}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />
+            <SettingRow
+              icon="delete-outline"
+              title="Cancella dati locali"
+              subtitle="Storico, nome salvato e preferenze"
+              onPress={confirmClearLocalData}
+              danger
+            />
+          </Panel>
+
+          <SectionTitle label="Info" kanji="情報" />
+          <Panel style={[styles.panel, styles.listPanel]}>
+            <SettingRow
+              icon="information-outline"
+              title="Sushi Streak"
+              subtitle={`Versione ${APP_VERSION}${APP_VARIANT !== 'production' ? ` (${APP_VARIANT})` : ''}`}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />
+            <SettingRow icon="account-heart-outline" title="Sviluppato da" subtitle="Dario Stevanato" />
+            <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />
+            <SettingRow
+              icon="code-tags"
+              title="Open source"
+              subtitle={`Licenza MIT · React Native, Expo, Socket.IO · © ${new Date().getFullYear()}`}
+            />
+          </Panel>
         </View>
-      </View>
+      </ScrollView>
 
-      <Divider style={styles.divider} />
-
-      {/* Condivisione sessione, solo se c'è una partita in corso */}
-      {sessionId && (
-        <>
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>Sessione</Text>
-            <View style={styles.shareContainer}>
-              <View style={styles.shareInfo}>
-                <Text style={{ color: theme.colors.onSurface, fontSize: 14, opacity: 0.7 }}>
-                  Sessione attiva: {sessionName} ({sessionId})
-                </Text>
-              </View>
-              <IconButton
-                icon="share-variant"
-                size={24}
-                accessibilityLabel="Condividi la sessione"
-                iconColor={canShare ? theme.colors.primary : theme.colors.onSurfaceDisabled}
-                onPress={() => setShowShareModal(true)}
-                style={[
-                  styles.shareButton,
-                  {
-                    backgroundColor: canShare
-                      ? isDarkMode
-                        ? 'rgba(255, 255, 255, 0.1)'
-                        : 'rgba(0, 0, 0, 0.05)'
-                      : 'rgba(128, 128, 128, 0.1)',
-                  },
-                ]}
-                disabled={!canShare}
-              />
-            </View>
-            {!canShare && (
-              <Text style={[styles.shareDisabledText, { color: theme.colors.onSurfaceDisabled }]}>
-                {gameEnded ? 'Sessione terminata' : 'Condivisione non disponibile'}
-              </Text>
-            )}
-          </View>
-
-          <Divider style={styles.divider} />
-        </>
-      )}
-
-      {/* Privacy */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>Privacy</Text>
-        <Button
-          mode="outlined"
-          icon="shield-account"
-          onPress={openPrivacyPolicy}
-          style={[styles.privacyButton, { borderColor: theme.colors.primary }]}
-          textColor={theme.colors.primary}
-        >
-          Informativa sulla privacy
-        </Button>
-        <Button mode="text" icon="delete-outline" onPress={confirmClearLocalData} textColor={theme.colors.error}>
-          Cancella dati locali
-        </Button>
-      </View>
-
-      <Divider style={styles.divider} />
-
-      {/* Info */}
-      <View style={styles.section}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.primary }]}>Info</Text>
-        <Button
-          mode="outlined"
-          onPress={() => setCreditsVisible(true)}
-          style={{ borderColor: theme.colors.primary }}
-          textColor={theme.colors.primary}
-        >
-          Crediti
-        </Button>
-
-        <Modal
-          visible={creditsVisible}
-          animationType="slide"
-          transparent
-          onRequestClose={() => setCreditsVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>Crediti</Text>
-              <ScrollView contentContainerStyle={styles.modalScrollContent}>
-                <Text style={[styles.modalItemTitle, { color: theme.colors.onSurface }]}>Sushi Streak</Text>
-                <Text style={[styles.modalItemDescription, { color: theme.colors.onSurfaceVariant }]}>
-                  Versione {APP_VERSION}
-                  {APP_VARIANT !== 'production' ? ` (${APP_VARIANT})` : ''}
-                </Text>
-
-                <Text style={[styles.modalItemTitle, { color: theme.colors.onSurface }]}>Sviluppato da</Text>
-                <Text style={[styles.modalItemDescription, { color: theme.colors.onSurfaceVariant }]}>
-                  Dario Stevanato
-                </Text>
-
-                <Text style={[styles.modalItemTitle, { color: theme.colors.onSurface }]}>Tecnologie</Text>
-                <Text style={[styles.modalItemDescription, { color: theme.colors.onSurfaceVariant }]}>
-                  React Native, Expo, Socket.IO
-                </Text>
-
-                <Text style={[styles.modalItemTitle, { color: theme.colors.onSurface }]}>
-                  © {new Date().getFullYear()}
-                </Text>
-                <Text style={[styles.modalItemDescription, { color: theme.colors.onSurfaceVariant }]}>
-                  Tutti i diritti riservati
-                </Text>
-              </ScrollView>
-
-              <Button
-                mode="contained"
-                onPress={() => setCreditsVisible(false)}
-                style={[styles.button, { backgroundColor: theme.colors.primary, alignSelf: 'center' }]}
-                labelStyle={{ color: theme.colors.onPrimary }}
-              >
-                Chiudi
-              </Button>
-            </View>
-          </View>
-        </Modal>
-      </View>
-
-      <Button
-        mode="contained"
-        onPress={() => navigation.goBack()}
-        style={[styles.button, { backgroundColor: theme.colors.primary, alignSelf: 'center' }]}
-        labelStyle={{ color: theme.colors.onPrimary }}
-      >
-        Chiudi
-      </Button>
-
-      {/* Modale di condivisione */}
-      <Modal visible={showShareModal} animationType="slide" transparent onRequestClose={() => setShowShareModal(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={[styles.shareModalContent, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[styles.shareModalTitle, { color: theme.colors.primary }]}>Condividi Sessione</Text>
-
-            <View style={styles.shareModalButtons}>
-              <TouchableOpacity
-                style={[styles.shareModalButton, { backgroundColor: theme.colors.primary }]}
-                onPress={copySessionCode}
-              >
-                <Text style={[styles.shareModalButtonText, { color: theme.colors.onPrimary }]}>Copia Codice</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.shareModalButton, { backgroundColor: theme.colors.primary }]}
-                onPress={shareSessionLink}
-              >
-                <Text style={[styles.shareModalButtonText, { color: theme.colors.onPrimary }]}>Condividi Link</Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.shareModalCancelButton, { borderColor: theme.colors.outline }]}
-              onPress={() => setShowShareModal(false)}
-            >
-              <Text style={[styles.shareModalCancelText, { color: theme.colors.onSurfaceVariant }]}>Annulla</Text>
-            </TouchableOpacity>
-          </View>
+      <Sheet visible={showShareModal} onClose={() => setShowShareModal(false)} title="Invita amici" kanji="招待">
+        <View style={[styles.codeBox, { borderColor: colors.outline, backgroundColor: colors.surfaceVariant }]}>
+          <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>Codice</Text>
+          <Text style={[styles.codeText, { color: colors.onSurface }]} selectable>
+            {sessionId}
+          </Text>
         </View>
-      </Modal>
+        <View style={styles.sheetButtons}>
+          <AppButton label="Condividi link" icon="share-variant" onPress={shareSessionLink} />
+          <AppButton label="Copia codice" icon="content-copy" variant="tonal" onPress={copySessionCode} />
+        </View>
+      </Sheet>
 
       <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={2500}>
         {snackbar}
       </Snackbar>
-    </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  privacyButton: {
-    marginBottom: 4,
-  },
-  container: {
+  screen: {
     flex: 1,
-    padding: 20,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginTop: 40,
-    marginBottom: 30,
-    textAlign: 'center',
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
   },
-  section: {
-    marginBottom: 20,
+  panel: {
+    marginBottom: 22,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 15,
+  listPanel: {
+    padding: 6,
   },
-  settingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 10,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginVertical: 5,
-  },
-  switchContainer: {
+  row: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 12,
+    borderRadius: radii.md,
   },
-  switchLabel: {
-    marginRight: 10,
-    fontSize: 18,
+  rowIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: radii.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  switch: {
-    transform: [{ scaleX: 1.1 }, { scaleY: 1.1 }],
+  rowText: {
+    flex: 1,
+    gap: 2,
+  },
+  rowTitle: {
+    fontFamily: fonts.semibold,
+    fontSize: 15.5,
   },
   divider: {
-    marginVertical: 15,
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 62,
   },
-  button: {
-    marginTop: 30,
-    marginBottom: 20,
-    borderRadius: 8,
-    paddingVertical: 6,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
+  codeBox: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: radii.lg,
     alignItems: 'center',
-    padding: 20,
+    paddingVertical: 18,
+    gap: 4,
   },
-  modalContent: {
-    width: '100%',
-    maxHeight: '80%',
-    borderRadius: 12,
-    padding: 20,
-    alignItems: 'center',
+  codeText: {
+    fontFamily: fonts.black,
+    fontSize: 30,
+    letterSpacing: 4,
   },
-  modalScrollContent: {
-    alignItems: 'center', // All elements centered
-    paddingVertical: 10,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    textAlign: 'center',
-  },
-  modalItemTitle: {
-    fontWeight: 'bold',
-    fontSize: 16,
-    marginTop: 15,
-    textAlign: 'center',
-  },
-  modalItemDescription: {
-    fontSize: 14,
-    marginBottom: 10,
-    textAlign: 'center',
-  },
-  shareContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    paddingHorizontal: 15,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    borderRadius: 12,
-    marginVertical: 5,
-  },
-  shareInfo: {
-    flex: 1,
-  },
-  shareButton: {
-    borderRadius: 25,
-  },
-  shareDisabledText: {
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 5,
-    fontStyle: 'italic',
-  },
-  shareModalContent: {
-    width: '90%',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-  },
-  shareModalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  shareModalButtons: {
-    width: '100%',
-    gap: 16,
-    marginBottom: 20,
-  },
-  shareModalButton: {
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minWidth: 200,
-  },
-  shareModalButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  shareModalCancelButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shareModalCancelText: {
-    fontSize: 14,
-    fontWeight: '500',
+  sheetButtons: {
+    gap: 10,
+    marginTop: 16,
   },
 });
 

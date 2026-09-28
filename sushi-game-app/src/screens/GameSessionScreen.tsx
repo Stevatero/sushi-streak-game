@@ -1,38 +1,49 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  Animated,
-  Modal,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { useTheme, Button, Card, TextInput, Snackbar } from 'react-native-paper';
+import { View, Text, StyleSheet, FlatList, Pressable, Alert } from 'react-native';
+import { IconButton, Snackbar } from 'react-native-paper';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+  Easing,
+} from 'react-native-reanimated';
 import { useShallow } from 'zustand/react/shallow';
 import useGameStore, { Player } from '../store/gameStore';
 import SushiStack from '../components/SushiStack';
-import Fireworks from '../components/Fireworks';
-import SettingsButton from '../components/SettingsButton';
+import SakuraCelebration from '../components/SakuraCelebration';
 import SoundManager from '../utils/SoundManager';
-import { useColorScheme } from '../theme/ThemeProvider';
 import { SessionStorageService, SavedSession } from '../services/sessionStorage';
 import { shareService } from '../services/shareService';
+import { RESTAURANT_NAME_MAX_LENGTH } from '../config';
 import type { RootNavigationProp, RootStackParamList } from '../navigation/types';
+import { AppTheme, fonts, radii, typography, useAppTheme } from '../theme/theme';
+import AppButton from '../components/ui/AppButton';
+import Field from '../components/ui/Field';
+import Hanko from '../components/ui/Hanko';
+import Panel from '../components/ui/Panel';
+import SectionTitle from '../components/ui/SectionTitle';
+import Sheet from '../components/ui/Sheet';
+import Tag from '../components/ui/Tag';
 
-const FIREWORKS_DURATION_MS = 6000;
+const CELEBRATION_DURATION_MS = 6000;
+
+// Posizione "sportiva": a pari punteggio si condivide il posto (1, 2, 2, 4)
+const rankOf = (players: Player[], score: number) => 1 + players.filter((p) => p.score > score).length;
+
+const medalColor = (rank: number, colors: AppTheme['colors']) =>
+  rank === 1 ? colors.gold : rank === 2 ? colors.silver : rank === 3 ? colors.bronze : undefined;
 
 const GameSessionScreen = () => {
   const route = useRoute<RouteProp<RootStackParamList, 'GameSession'>>();
   const navigation = useNavigation<RootNavigationProp>();
-  const theme = useTheme();
+  const theme = useAppTheme();
+  const { colors } = theme;
   const insets = useSafeAreaInsets();
-  const { isDarkMode } = useColorScheme();
   const { sessionId, sessionName, playerName, playerId, playerToken, isHost } = route.params;
 
   const { players, gameEnded, endReason, connection, status, startSession, addPiece, removePiece, finishGame } =
@@ -50,11 +61,10 @@ const GameSessionScreen = () => {
       }))
     );
 
-  const [sushiIconAnimation] = useState(() => new Animated.Value(1));
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [showFireworks, setShowFireworks] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
   const [finishRequested, setFinishRequested] = useState(false);
   const [restaurantName, setRestaurantName] = useState('');
   const [snackbar, setSnackbar] = useState('');
@@ -63,6 +73,7 @@ const GameSessionScreen = () => {
   const restaurantRef = useRef('');
   const allowExitRef = useRef(false);
   const endHandledRef = useRef(false);
+  const celebrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Salvataggio iniziale della sessione attiva: la pulizia di fine partita deve avvenire dopo
   const activeSavedRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -70,8 +81,19 @@ const GameSessionScreen = () => {
   const myScore = me?.score ?? 0;
   const hasFinished = finishRequested || !!me?.finished;
   const sortedPlayers = useMemo(() => [...players].sort((a, b) => b.score - a.score), [players]);
-  const myRank = sortedPlayers.findIndex((p) => p.id === playerId) + 1;
-  const winner = sortedPlayers[0];
+  const myRank = me ? rankOf(players, me.score) : 0;
+  const topScore = sortedPlayers[0]?.score ?? 0;
+  const winners = useMemo(
+    () => (topScore > 0 ? sortedPlayers.filter((p) => p.score === topScore) : []),
+    [sortedPlayers, topScore]
+  );
+  const iWon = winners.some((p) => p.id === playerId);
+  const winnerText =
+    winners.length === 0
+      ? 'Nessun pezzo mangiato'
+      : winners.length > 1
+        ? `Pareggio tra ${winners.map((p) => p.name).join(' e ')} con ${topScore} pezzi!`
+        : `Vince ${winners[0].name} con ${topScore} pezzi!`;
   const isOnline = connection === 'connected';
   const canShare = status === 'active' && !gameEnded;
 
@@ -100,6 +122,13 @@ const GameSessionScreen = () => {
     return () => useGameStore.getState().resetGame();
   }, [sessionId, sessionName, playerId, playerName, playerToken, isHost, startSession]);
 
+  useEffect(
+    () => () => {
+      if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
+    },
+    []
+  );
+
   // Uscita con conferma (tasto indietro Android): la partita resta riprendibile dalla Home
   useEffect(() => {
     return navigation.addListener('beforeRemove', (e) => {
@@ -123,13 +152,18 @@ const GameSessionScreen = () => {
     async (list: Player[]) => {
       if (list.length === 0) return;
       const sorted = [...list].sort((a, b) => b.score - a.score);
+      const best = sorted[0]?.score ?? 0;
+      const tied = sorted.filter((p) => p.score === best);
       const record: SavedSession = {
         id: `${sessionId}:${startedAtRef.current}`,
         sessionName,
         restaurant: restaurantRef.current,
         date: startedAtRef.current,
         players: sorted,
-        winner: { name: sorted[0]?.name || 'Nessuno', score: sorted[0]?.score || 0 },
+        winner: {
+          name: best > 0 ? tied.map((p) => p.name).join(' e ') : 'Nessuno',
+          score: best,
+        },
         duration: SessionStorageService.formatDuration(startedAtRef.current),
       };
       try {
@@ -154,10 +188,10 @@ const GameSessionScreen = () => {
 
     if (endReason === 'ended') {
       setShowLeaderboardModal(true);
-      if (winner?.id === playerId) {
+      if (iWon) {
         SoundManager.playVictorySound();
-        setShowFireworks(true);
-        setTimeout(() => setShowFireworks(false), FIREWORKS_DURATION_MS);
+        setShowCelebration(true);
+        celebrationTimerRef.current = setTimeout(() => setShowCelebration(false), CELEBRATION_DURATION_MS);
       }
     } else if (endReason === 'expired') {
       Alert.alert(
@@ -177,17 +211,24 @@ const GameSessionScreen = () => {
     navigation.popTo('Home');
   };
 
+  // Pulsante "+1": piccolo rimbalzo e un'onda che si allarga
+  const pressScale = useSharedValue(1);
+  const ring = useSharedValue(0);
+  const addButtonStyle = useAnimatedStyle(() => ({ transform: [{ scale: pressScale.value }] }));
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: ring.value === 0 ? 0 : 0.45 * (1 - ring.value),
+    transform: [{ scale: 1 + ring.value * 0.55 }],
+  }));
+
   const handleAddPiece = async () => {
     if (!isOnline) {
       setSnackbar('Sei offline: attendi la riconnessione');
       return;
     }
     SoundManager.playPieceSound();
-    Animated.sequence([
-      Animated.timing(sushiIconAnimation, { toValue: 0, duration: 150, useNativeDriver: true }),
-      Animated.timing(sushiIconAnimation, { toValue: 1.2, duration: 200, useNativeDriver: true }),
-      Animated.timing(sushiIconAnimation, { toValue: 1, duration: 150, useNativeDriver: true }),
-    ]).start();
+    pressScale.value = withSequence(withTiming(0.9, { duration: 70 }), withSpring(1, { damping: 9, stiffness: 320 }));
+    ring.value = 0;
+    ring.value = withTiming(1, { duration: 520, easing: Easing.out(Easing.quad) });
 
     const res = await addPiece();
     if (!res.ok && res.code !== 'rate_limited') setSnackbar(res.error || 'Pezzo non registrato');
@@ -211,7 +252,6 @@ const GameSessionScreen = () => {
             setSnackbar(res.error || 'Impossibile completare, riprova');
             return;
           }
-          SoundManager.playVictorySound();
           setShowLeaderboardModal(true);
         },
       },
@@ -237,291 +277,361 @@ const GameSessionScreen = () => {
     setSnackbar('Partita salvata nello storico');
   };
 
-  const textColor = isDarkMode ? '#FFFFFF' : theme.colors.onSurface;
+  const renderRankBadge = (rank: number, size = 28) => {
+    const medal = medalColor(rank, colors);
+    return (
+      <Hanko
+        label={String(rank)}
+        size={size}
+        shape="circle"
+        tilt={0}
+        color={medal ?? colors.surfaceVariant}
+        textColor={medal ? '#FFFFFF' : colors.onSurfaceVariant}
+      />
+    );
+  };
 
-  const renderPlayerRow = (item: Player, index: number, large = false) => (
-    <View
-      style={[
-        large ? styles.modalPlayerRow : styles.playerRow,
-        { borderBottomColor: theme.colors.outlineVariant },
-        item.id === playerId ? { backgroundColor: theme.colors.primaryContainer } : null,
-      ]}
-    >
-      <Text style={[large ? styles.modalRank : styles.rank, { color: large ? theme.colors.primary : textColor }]}>
-        {index + 1}°
-      </Text>
-      <Text style={[large ? styles.modalPlayerName : styles.playerName, { color: textColor }]} numberOfLines={1}>
-        {item.name}
-        {item.id === playerId ? ' (tu)' : ''}
-      </Text>
-      <Text style={[large ? styles.modalScore : styles.score, { color: textColor }]}>{item.score} 🍣</Text>
-      {!large && item.finished && <Text style={styles.finishedTag}>Finito</Text>}
-    </View>
-  );
+  const renderPlayerRow = (item: Player) => {
+    const isMe = item.id === playerId;
+    return (
+      <View style={[styles.playerRow, isMe && { backgroundColor: colors.primaryContainer }]}>
+        {renderRankBadge(rankOf(players, item.score))}
+        <Text
+          style={[styles.playerName, { color: isMe ? colors.onPrimaryContainer : colors.onSurface }]}
+          numberOfLines={1}
+        >
+          {item.name}
+          {isMe ? ' (tu)' : ''}
+        </Text>
+        {item.finished ? (
+          <Tag label="Finito" kanji="完" color={colors.onTertiaryContainer} background={colors.tertiaryContainer} />
+        ) : null}
+        <Text style={[styles.playerScore, { color: isMe ? colors.onPrimaryContainer : colors.onSurface }]}>
+          {item.score}
+        </Text>
+      </View>
+    );
+  };
+
+  const podium = sortedPlayers.slice(0, 3);
+  const podiumOrder = podium.length === 3 ? [podium[1], podium[0], podium[2]] : podium;
+
+  const connectionLabel = isOnline ? 'Online' : connection === 'connecting' ? 'Riconnessione…' : 'Offline';
+  const connectionColor = isOnline ? colors.tertiary : connection === 'connecting' ? colors.gold : colors.error;
 
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: theme.colors.background, paddingTop: insets.top + 16, paddingBottom: insets.bottom },
-      ]}
-    >
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SushiStack pieceCount={myScore} />
-      <Fireworks isVisible={showFireworks} />
+      {/* Con la classifica finale aperta i petali cadono sopra il pannello */}
+      <SakuraCelebration isVisible={showCelebration && !showLeaderboardModal} />
 
-      {!isOnline && !gameEnded && (
-        <View style={[styles.connectionBanner, { backgroundColor: theme.colors.errorContainer }]}>
-          <Text style={{ color: theme.colors.onErrorContainer, textAlign: 'center' }}>
-            {connection === 'connecting' ? '🔄 Riconnessione in corso…' : '⚠️ Non connesso al server'}
+      {/* Barra superiore */}
+      <View style={[styles.topBar, { paddingTop: insets.top + 6 }]}>
+        <IconButton
+          icon="arrow-left"
+          accessibilityLabel="Esci dalla partita"
+          iconColor={colors.onSurface}
+          onPress={() => navigation.goBack()}
+          style={[styles.roundIcon, { backgroundColor: colors.glass, borderColor: colors.outlineVariant }]}
+        />
+        <Pressable
+          onPress={canShare ? () => setShowShareModal(true) : undefined}
+          disabled={!canShare}
+          accessibilityRole="button"
+          accessibilityLabel="Condividi la sessione"
+          style={[styles.sessionChip, { backgroundColor: colors.glass, borderColor: colors.outlineVariant }]}
+        >
+          <View style={[styles.statusDot, { backgroundColor: connectionColor }]} />
+          <View style={styles.sessionChipText}>
+            <Text style={[styles.sessionCode, { color: colors.onSurface }]} numberOfLines={1}>
+              {sessionName || sessionId}
+            </Text>
+            <Text style={[typography.caption, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
+              {canShare ? `${connectionLabel} · Tocca per invitare` : connectionLabel}
+            </Text>
+          </View>
+          {canShare ? <MaterialCommunityIcons name="share-variant" size={18} color={colors.primary} /> : null}
+        </Pressable>
+        <IconButton
+          icon="cog-outline"
+          accessibilityLabel="Impostazioni"
+          iconColor={colors.onSurface}
+          onPress={() => navigation.navigate('Settings')}
+          style={[styles.roundIcon, { backgroundColor: colors.glass, borderColor: colors.outlineVariant }]}
+        />
+      </View>
+
+      {!isOnline && !gameEnded ? (
+        <View style={[styles.connectionBanner, { backgroundColor: colors.errorContainer }]}>
+          <MaterialCommunityIcons
+            name={connection === 'connecting' ? 'wifi-sync' : 'wifi-off'}
+            size={16}
+            color={colors.onErrorContainer}
+          />
+          <Text style={[typography.caption, { color: colors.onErrorContainer }]}>
+            {connection === 'connecting' ? 'Riconnessione in corso…' : 'Non connesso al server'}
           </Text>
         </View>
-      )}
+      ) : null}
 
-      <Text style={[styles.sessionLabel, { color: theme.colors.onSurface }]}>Sessione</Text>
-      <TouchableOpacity
-        onPress={canShare ? () => setShowShareModal(true) : undefined}
-        disabled={!canShare}
-        style={styles.sessionTitleContainer}
-        accessibilityRole="button"
-        accessibilityLabel="Condividi la sessione"
-      >
-        <Text
-          style={[
-            styles.title,
-            {
-              color: canShare ? theme.colors.primary : theme.colors.onSurface,
-              textDecorationLine: canShare ? 'underline' : 'none',
-            },
-          ]}
-        >
-          {sessionName || sessionId}
+      {/* Punteggio personale */}
+      <View style={styles.hero}>
+        <SectionTitle label="I tuoi pezzi" kanji="貫" style={styles.heroLabel} />
+        <Text style={[styles.heroScore, { color: colors.onBackground }]} accessibilityLabel={`${myScore} pezzi`}>
+          {myScore}
         </Text>
-        {canShare && <Text style={[styles.shareHint, { color: theme.colors.onSurfaceVariant }]}>👆 Condividi</Text>}
-      </TouchableOpacity>
+        {myRank > 0 ? (
+          <View style={styles.heroRank}>
+            {renderRankBadge(myRank, 26)}
+            <Text style={[typography.bodyStrong, { color: colors.onSurfaceVariant }]}>
+              {`Sei ${myRank}° su ${players.length} · ${myScore} pezzi`}
+            </Text>
+          </View>
+        ) : null}
+      </View>
 
-      <Card style={styles.leaderboardCard}>
-        <Card.Title
-          title="Classifica in tempo reale"
-          subtitle={myRank > 0 ? `Sei ${myRank}° su ${players.length} · ${myScore} pezzi` : undefined}
+      {/* Classifica in tempo reale */}
+      <Panel tone="glass" style={styles.leaderboard}>
+        <SectionTitle
+          label="Classifica"
+          kanji="順位"
+          right={
+            <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>{players.length} giocatori</Text>
+          }
         />
-        <Card.Content>
-          <FlatList
-            data={sortedPlayers}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item, index }) => renderPlayerRow(item, index)}
-            style={styles.liveList}
-          />
-        </Card.Content>
-      </Card>
+        <FlatList
+          data={sortedPlayers}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => renderPlayerRow(item)}
+          style={styles.liveList}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+        />
+      </Panel>
 
-      {!gameEnded ? (
-        <>
-          <View style={styles.controlsContainer}>
-            {!hasFinished && (
-              <>
-                <TouchableOpacity
-                  style={[styles.addButton, { backgroundColor: theme.colors.primary, opacity: isOnline ? 1 : 0.6 }]}
+      <View style={styles.flex} pointerEvents="none" />
+
+      {/* Comandi */}
+      <View style={[styles.controls, { paddingBottom: insets.bottom + 18 }]}>
+        {!gameEnded && !hasFinished ? (
+          <View style={styles.controlsRow}>
+            <View style={styles.sideControl}>
+              <IconButton
+                icon="undo-variant"
+                accessibilityLabel="Annulla ultimo"
+                iconColor={colors.onSurface}
+                size={24}
+                onPress={handleRemovePiece}
+                disabled={myScore === 0 || !isOnline}
+                style={[styles.sideButton, { backgroundColor: colors.glass, borderColor: colors.outline }]}
+              />
+              <Text style={[styles.caption, { color: colors.onSurface, backgroundColor: colors.glass }]}>Annulla</Text>
+            </View>
+
+            <View style={styles.addWrapper}>
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.addRing, { borderColor: colors.primary }, ringStyle]}
+              />
+              <Animated.View style={addButtonStyle}>
+                <Pressable
                   onPress={handleAddPiece}
                   accessibilityRole="button"
                   accessibilityLabel="Aggiungi pezzo"
+                  style={[
+                    styles.addButton,
+                    { backgroundColor: colors.primary, shadowColor: colors.primary, opacity: isOnline ? 1 : 0.55 },
+                  ]}
                 >
-                  <Animated.Text
-                    style={[
-                      styles.sushiIcon,
-                      { transform: [{ scale: sushiIconAnimation }], opacity: sushiIconAnimation },
-                    ]}
-                  >
-                    🍣
-                  </Animated.Text>
-                  <Text style={styles.addButtonText}>Aggiungi Pezzo</Text>
-                </TouchableOpacity>
-                <Button mode="text" icon="undo" onPress={handleRemovePiece} disabled={myScore === 0 || !isOnline}>
-                  Annulla ultimo
-                </Button>
-              </>
-            )}
-            {hasFinished && (
-              <Text style={[styles.waitingText, { color: theme.colors.onSurface }]}>
-                Hai finito! In attesa degli altri giocatori…
+                  <Text style={[styles.addPlus, { color: colors.onPrimary }]}>+1</Text>
+                  <Text style={[styles.addKanji, { color: colors.onPrimary }]}>貫</Text>
+                </Pressable>
+              </Animated.View>
+              <Text
+                style={[styles.caption, styles.addCaption, { color: colors.onSurface, backgroundColor: colors.glass }]}
+              >
+                Aggiungi pezzo
               </Text>
-            )}
-          </View>
-
-          <Button
-            mode="outlined"
-            onPress={handleFinish}
-            disabled={hasFinished}
-            style={[
-              styles.finishButtonBottomLeft,
-              {
-                bottom: 20 + insets.bottom,
-                backgroundColor: isDarkMode ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.8)',
-              },
-            ]}
-          >
-            Ho finito!
-          </Button>
-        </>
-      ) : (
-        <View style={styles.gameEndedContainer}>
-          <Text style={[styles.gameEndedText, { color: theme.colors.primary }]}>
-            {endReason === 'expired' ? 'Sessione scaduta' : 'Partita terminata!'}
-          </Text>
-          <Text style={[styles.winnerText, { color: theme.colors.secondary }]}>
-            Vincitore: {winner?.name || 'Nessuno'} con {winner?.score || 0} pezzi!
-          </Text>
-          <Button mode="outlined" onPress={() => setShowSaveModal(true)} style={styles.modalButton}>
-            📍 Aggiungi ristorante
-          </Button>
-          <Button mode="contained" onPress={goHome} style={styles.newGameButton}>
-            🎮 Nuova Partita
-          </Button>
-        </View>
-      )}
-
-      {/* Modale della classifica finale */}
-      <Modal
-        visible={showLeaderboardModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowLeaderboardModal(false)}
-        statusBarTranslucent
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-            <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>
-              {gameEnded ? '🏆 Classifica Finale' : '🏆 Classifica attuale'}
-            </Text>
-
-            <FlatList
-              data={sortedPlayers}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item, index }) => renderPlayerRow(item, index, true)}
-              style={styles.leaderboardList}
-            />
-
-            <Text style={[styles.savedNote, { color: theme.colors.onSurfaceVariant }]}>
-              La partita viene salvata automaticamente nello storico.
-            </Text>
-
-            <View style={styles.modalButtons}>
-              <Button mode="outlined" onPress={() => setShowLeaderboardModal(false)} style={styles.modalButton}>
-                Chiudi
-              </Button>
-              <Button
-                mode="outlined"
-                onPress={() => {
-                  setShowLeaderboardModal(false);
-                  setShowSaveModal(true);
-                }}
-                style={styles.modalButton}
-              >
-                📍 Aggiungi ristorante
-              </Button>
-              <Button
-                mode="contained"
-                onPress={() => {
-                  setShowLeaderboardModal(false);
-                  goHome();
-                }}
-                style={styles.modalButton}
-              >
-                🎮 Nuova Partita
-              </Button>
             </View>
-          </View>
-        </View>
-      </Modal>
 
-      {/* Modale per il nome del ristorante */}
-      <Modal
-        visible={showSaveModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowSaveModal(false)}
-        statusBarTranslucent
-      >
-        <View style={styles.modalOverlay}>
-          <KeyboardAvoidingView
-            style={styles.keyboardAvoidingContainer}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          >
-            <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
-              <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>📍 Dove avete mangiato?</Text>
-
-              <TextInput
-                mode="outlined"
-                label="Nome del ristorante"
-                placeholder="Es. Sushi Zen, Sakura, ..."
-                value={restaurantName}
-                onChangeText={setRestaurantName}
-                style={styles.restaurantInput}
-                maxLength={60}
-                autoFocus
-                returnKeyType="done"
-                onSubmitEditing={saveRestaurant}
+            <View style={styles.sideControl}>
+              <IconButton
+                icon="flag-checkered"
+                accessibilityLabel="Ho finito!"
+                iconColor={colors.onSurface}
+                size={24}
+                onPress={handleFinish}
+                style={[styles.sideButton, { backgroundColor: colors.glass, borderColor: colors.outline }]}
               />
+              <Text style={[styles.caption, { color: colors.onSurface, backgroundColor: colors.glass }]}>
+                Ho finito
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
-              <View style={styles.saveModalInfo}>
-                <Text style={[styles.saveInfoLabel, { color: theme.colors.onSurfaceVariant }]}>
-                  Sessione: {sessionName}
-                </Text>
-                <Text style={[styles.saveInfoLabel, { color: theme.colors.onSurfaceVariant }]}>
-                  Data: {SessionStorageService.formatDate(startedAtRef.current)}
-                </Text>
-                <Text style={[styles.saveInfoLabel, { color: theme.colors.onSurfaceVariant }]}>
-                  Vincitore: {winner?.name || 'Nessuno'} ({winner?.score || 0} pezzi)
-                </Text>
-              </View>
+        {!gameEnded && hasFinished ? (
+          <Panel tone="glass" style={styles.statusPanel}>
+            <Hanko label="完" size={46} />
+            <View style={styles.flex}>
+              <Text style={[typography.subtitle, { color: colors.onSurface }]}>Hai finito! ごちそうさま</Text>
+              <Text style={[typography.body, { color: colors.onSurfaceVariant }]}>
+                In attesa degli altri giocatori…
+              </Text>
+            </View>
+          </Panel>
+        ) : null}
 
-              <View style={styles.modalButtons}>
-                <Button mode="outlined" onPress={() => setShowSaveModal(false)} style={styles.modalButton}>
-                  Annulla
-                </Button>
-                <Button mode="contained" onPress={saveRestaurant} style={styles.modalButton}>
-                  Salva
-                </Button>
+        {gameEnded ? (
+          <Panel tone="glass">
+            <View style={styles.statusPanel}>
+              <Hanko label="勝" size={50} color={iWon ? colors.gold : colors.primary} />
+              <View style={styles.flex}>
+                <Text style={[typography.title, { color: colors.onSurface }]}>
+                  {endReason === 'expired' ? 'Sessione scaduta' : 'Partita terminata!'}
+                </Text>
+                <Text style={[typography.body, { color: colors.onSurfaceVariant }]}>{winnerText}</Text>
               </View>
             </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
-      {/* Modale di condivisione */}
-      <Modal
-        visible={showShareModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowShareModal(false)}
-        statusBarTranslucent
-      >
-        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowShareModal(false)}>
-          <TouchableOpacity
-            style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <Text style={[styles.modalTitle, { color: theme.colors.primary }]}>🍣 Condividi Sessione</Text>
-            <Text style={[styles.saveModalDescription, { color: theme.colors.onSurface }]}>
-              Codice: <Text style={{ fontWeight: 'bold' }}>{sessionId}</Text>
-            </Text>
-            <View style={styles.shareModalButtons}>
-              <Button mode="contained" onPress={copySessionCode} style={styles.shareModalButton} icon="content-copy">
-                Copia Codice
-              </Button>
-              <Button mode="contained" onPress={shareSessionLink} style={styles.shareModalButton} icon="share-variant">
-                Condividi Link
-              </Button>
+            <View style={styles.endButtons}>
+              <AppButton
+                label="Ristorante"
+                icon="map-marker-outline"
+                variant="outline"
+                onPress={() => setShowSaveModal(true)}
+                style={styles.flex}
+              />
+              <AppButton label="Nuova partita" icon="plus" onPress={goHome} style={styles.flex} />
             </View>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      <View style={[styles.settingsButtonContainer, { bottom: 20 + insets.bottom }]}>
-        <SettingsButton />
+          </Panel>
+        ) : null}
       </View>
 
-      <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={2500} style={styles.snackbar}>
+      {/* Classifica finale */}
+      <Sheet
+        visible={showLeaderboardModal}
+        onClose={() => setShowLeaderboardModal(false)}
+        title={gameEnded ? 'Classifica finale' : 'Classifica attuale'}
+        kanji="結果"
+        overlay={<SakuraCelebration isVisible={showCelebration} />}
+      >
+        {gameEnded && winners.length > 0 ? (
+          <Text style={[typography.bodyStrong, styles.sheetWinner, { color: colors.primary }]}>{winnerText}</Text>
+        ) : null}
+        {podiumOrder.length > 1 ? (
+          <View style={styles.podium}>
+            {podiumOrder.map((p) => {
+              const rank = rankOf(players, p.score);
+              const height = rank === 1 ? 86 : rank === 2 ? 64 : 48;
+              return (
+                <View key={p.id} style={styles.podiumColumn}>
+                  <Text style={[styles.podiumName, { color: colors.onSurface }]} numberOfLines={1}>
+                    {p.name}
+                  </Text>
+                  <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>{p.score} pezzi</Text>
+                  <View
+                    style={[
+                      styles.podiumBlock,
+                      { height, backgroundColor: p.id === playerId ? colors.primaryContainer : colors.surfaceVariant },
+                    ]}
+                  >
+                    {renderRankBadge(rank, 32)}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
+
+        <FlatList
+          data={podiumOrder.length > 1 ? sortedPlayers.slice(3) : sortedPlayers}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => renderPlayerRow(item)}
+          style={styles.sheetList}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
+        />
+
+        <Text style={[typography.caption, styles.savedNote, { color: colors.onSurfaceVariant }]}>
+          La partita viene salvata automaticamente nello storico.
+        </Text>
+
+        <View style={styles.sheetButtons}>
+          <AppButton
+            label="Nuova partita"
+            icon="plus"
+            onPress={() => {
+              setShowLeaderboardModal(false);
+              goHome();
+            }}
+          />
+          <View style={styles.endButtons}>
+            <AppButton
+              label="Ristorante"
+              icon="map-marker-outline"
+              variant="outline"
+              onPress={() => {
+                setShowLeaderboardModal(false);
+                setShowSaveModal(true);
+              }}
+              style={styles.flex}
+            />
+            <AppButton
+              label="Chiudi"
+              variant="ghost"
+              onPress={() => setShowLeaderboardModal(false)}
+              style={styles.flex}
+            />
+          </View>
+        </View>
+      </Sheet>
+
+      {/* Nome del ristorante */}
+      <Sheet visible={showSaveModal} onClose={() => setShowSaveModal(false)} title="Dove avete mangiato?" kanji="店">
+        <Field
+          label="Nome del ristorante"
+          placeholder="Es. Sushi Zen, Sakura…"
+          value={restaurantName}
+          onChangeText={setRestaurantName}
+          maxLength={RESTAURANT_NAME_MAX_LENGTH}
+          autoFocus
+          returnKeyType="done"
+          onSubmitEditing={saveRestaurant}
+        />
+        <View style={[styles.infoBox, { backgroundColor: colors.surfaceVariant }]}>
+          <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>Sessione: {sessionName}</Text>
+          <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>
+            Data: {SessionStorageService.formatDate(startedAtRef.current)}
+          </Text>
+          <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>{winnerText}</Text>
+        </View>
+        <View style={styles.endButtons}>
+          <AppButton label="Annulla" variant="ghost" onPress={() => setShowSaveModal(false)} style={styles.flex} />
+          <AppButton label="Salva" icon="check" onPress={saveRestaurant} style={styles.flex} />
+        </View>
+      </Sheet>
+
+      {/* Invito */}
+      <Sheet visible={showShareModal} onClose={() => setShowShareModal(false)} title="Invita amici" kanji="招待">
+        <Text style={[typography.body, { color: colors.onSurfaceVariant }]}>
+          Condividi il link oppure fai inserire il codice nella schermata iniziale.
+        </Text>
+        <View style={[styles.codeBox, { borderColor: colors.outline, backgroundColor: colors.surfaceVariant }]}>
+          <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>Codice</Text>
+          <Text style={[styles.codeText, { color: colors.onSurface }]} selectable>
+            {sessionId}
+          </Text>
+        </View>
+        <View style={styles.sheetButtons}>
+          <AppButton label="Condividi link" icon="share-variant" onPress={shareSessionLink} />
+          <AppButton label="Copia codice" icon="content-copy" variant="tonal" onPress={copySessionCode} />
+        </View>
+      </Sheet>
+
+      <Snackbar
+        visible={!!snackbar}
+        onDismiss={() => setSnackbar('')}
+        duration={2500}
+        style={[styles.snackbar, { marginBottom: insets.bottom + 150 }]}
+      >
         {snackbar}
       </Snackbar>
     </View>
@@ -531,251 +641,238 @@ const GameSessionScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    paddingHorizontal: 20,
+  },
+  flex: {
+    flex: 1,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    gap: 4,
+  },
+  roundIcon: {
+    borderWidth: StyleSheet.hairlineWidth,
+    margin: 0,
+  },
+  sessionChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: radii.pill,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  sessionChipText: {
+    flex: 1,
+  },
+  sessionCode: {
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    letterSpacing: 1.2,
+  },
+  statusDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
   },
   connectionBanner: {
-    borderRadius: 8,
-    padding: 8,
-    marginBottom: 8,
-  },
-  sessionLabel: {
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 2,
-    opacity: 0.7,
-    marginTop: 10,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-  },
-  sessionTitleContainer: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 16,
+    alignSelf: 'center',
+    gap: 6,
+    marginTop: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.pill,
   },
-  shareHint: {
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 4,
-    fontStyle: 'italic',
+  hero: {
+    alignItems: 'center',
+    marginTop: 14,
+    marginBottom: 10,
   },
-  leaderboardCard: {
-    marginBottom: 16,
-    borderRadius: 10,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+  heroLabel: {
+    marginBottom: 0,
+  },
+  heroScore: {
+    fontFamily: fonts.black,
+    fontSize: 84,
+    lineHeight: 92,
+    letterSpacing: -2,
+    fontVariant: ['tabular-nums'],
+  },
+  heroRank: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  leaderboard: {
+    marginHorizontal: 16,
+    paddingBottom: 10,
   },
   liveList: {
-    maxHeight: 200,
+    maxHeight: 196,
   },
   playerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    gap: 10,
+    paddingVertical: 8,
     paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderRadius: 6,
-    marginBottom: 4,
-  },
-  rank: {
-    width: 34,
-    fontWeight: 'bold',
-    fontSize: 16,
+    borderRadius: radii.sm,
   },
   playerName: {
     flex: 1,
+    fontFamily: fonts.medium,
     fontSize: 16,
   },
-  score: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginRight: 10,
+  playerScore: {
+    fontFamily: fonts.bold,
+    fontSize: 18,
+    minWidth: 32,
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
   },
-  finishedTag: {
+  separator: {
+    height: 2,
+  },
+  controls: {
+    paddingHorizontal: 16,
+  },
+  controlsRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+  },
+  sideControl: {
+    alignItems: 'center',
+    width: 76,
+    marginBottom: 26,
+  },
+  sideButton: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1.5,
+    margin: 0,
+  },
+  // Le didascalie hanno uno sfondo semitrasparente per restare leggibili sopra la pila
+  caption: {
+    fontFamily: fonts.semibold,
     fontSize: 12,
-    color: 'green',
-    fontWeight: 'bold',
+    marginTop: 6,
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 10,
-    backgroundColor: 'rgba(0, 200, 0, 0.1)',
+    borderRadius: radii.pill,
+    overflow: 'hidden',
   },
-  controlsContainer: {
+  addWrapper: {
     alignItems: 'center',
-    marginTop: 8,
+  },
+  addRing: {
+    position: 'absolute',
+    top: 0,
+    width: 112,
+    height: 112,
+    borderRadius: 56,
+    borderWidth: 3,
   },
   addButton: {
-    paddingVertical: 15,
-    paddingHorizontal: 30,
-    borderRadius: 50,
-    marginBottom: 4,
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    width: 112,
+    height: 112,
+    borderRadius: 56,
     alignItems: 'center',
     justifyContent: 'center',
+    elevation: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
   },
-  sushiIcon: {
-    fontSize: 32,
-    marginBottom: 5,
+  addPlus: {
+    fontFamily: fonts.black,
+    fontSize: 38,
+    lineHeight: 42,
   },
-  addButtonText: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+  addKanji: {
+    fontSize: 14,
+    fontWeight: '700',
+    opacity: 0.85,
   },
-  waitingText: {
-    fontSize: 16,
-    textAlign: 'center',
+  addCaption: {
+    fontSize: 13,
     marginTop: 10,
-    opacity: 0.8,
   },
-  finishButtonBottomLeft: {
-    position: 'absolute',
-    left: 20,
-    borderRadius: 30,
-    paddingVertical: 6,
-    zIndex: 1,
-  },
-  gameEndedContainer: {
-    alignItems: 'center',
-    marginTop: 10,
-    padding: 20,
-    borderRadius: 15,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-  },
-  gameEndedText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 15,
-    textAlign: 'center',
-  },
-  winnerText: {
-    fontSize: 20,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  newGameButton: {
-    marginTop: 12,
-    paddingHorizontal: 50,
-    paddingVertical: 15,
-    borderRadius: 30,
-    minWidth: 200,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  keyboardAvoidingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '100%',
-  },
-  modalContent: {
-    width: '90%',
-    maxHeight: '80%',
-    borderRadius: 20,
-    padding: 20,
-    elevation: 10,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-  },
-  modalTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  modalPlayerRow: {
+  statusPanel: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 15,
-    paddingHorizontal: 10,
-    borderBottomWidth: 1,
-    borderRadius: 8,
-    marginBottom: 5,
+    gap: 16,
   },
-  modalRank: {
-    width: 40,
-    fontWeight: 'bold',
-    fontSize: 18,
+  endButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
   },
-  modalPlayerName: {
+  sheetWinner: {
+    marginBottom: 12,
+  },
+  podium: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    marginBottom: 12,
+  },
+  podiumColumn: {
     flex: 1,
-    fontSize: 18,
-    fontWeight: '500',
+    alignItems: 'center',
   },
-  modalScore: {
-    fontSize: 18,
-    fontWeight: 'bold',
+  podiumName: {
+    fontFamily: fonts.semibold,
+    fontSize: 14,
+  },
+  podiumBlock: {
+    alignSelf: 'stretch',
+    marginTop: 6,
+    borderTopLeftRadius: radii.md,
+    borderTopRightRadius: radii.md,
+    alignItems: 'center',
+    paddingTop: 10,
+  },
+  sheetList: {
+    maxHeight: 220,
   },
   savedNote: {
-    fontSize: 12,
     textAlign: 'center',
-    marginTop: 8,
-  },
-  modalButtons: {
-    flexDirection: 'column',
-    marginTop: 16,
-    gap: 10,
-  },
-  modalButton: {
-    borderRadius: 25,
-    paddingHorizontal: 20,
-    paddingVertical: 6,
-    minWidth: 120,
-  },
-  leaderboardList: {
-    maxHeight: 300,
-    marginBottom: 10,
-  },
-  saveModalDescription: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 20,
-    opacity: 0.8,
-  },
-  restaurantInput: {
-    marginBottom: 20,
-  },
-  saveModalInfo: {
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
-    padding: 15,
-    borderRadius: 10,
-  },
-  saveInfoLabel: {
-    fontSize: 14,
-    marginBottom: 5,
-  },
-  settingsButtonContainer: {
-    position: 'absolute',
-    right: 20,
-    zIndex: 10,
-  },
-  shareModalButtons: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: 15,
     marginTop: 10,
   },
-  shareModalButton: {
-    width: '100%',
-    paddingVertical: 10,
-    borderRadius: 30,
+  sheetButtons: {
+    gap: 10,
+    marginTop: 16,
+  },
+  infoBox: {
+    borderRadius: radii.md,
+    padding: 14,
+    gap: 4,
+  },
+  codeBox: {
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderRadius: radii.lg,
+    alignItems: 'center',
+    paddingVertical: 18,
+    marginTop: 16,
+    gap: 4,
+  },
+  codeText: {
+    fontFamily: fonts.black,
+    fontSize: 30,
+    letterSpacing: 4,
   },
   snackbar: {
-    marginBottom: 80,
+    marginHorizontal: 16,
   },
 });
 

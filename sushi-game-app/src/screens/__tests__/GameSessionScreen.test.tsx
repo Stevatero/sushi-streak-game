@@ -11,9 +11,10 @@ import useGameStore from '../../store/gameStore';
 
 type Listener = (payload: any) => void;
 
+jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('../../components/SushiStack', () => () => null);
-jest.mock('../../components/Fireworks', () => () => null);
+jest.mock('../../components/SakuraCelebration', () => () => null);
 jest.mock('@react-navigation/native', () => ({
   useRoute: () => ({
     params: {
@@ -119,7 +120,7 @@ describe('GameSessionScreen', () => {
     renderWithProviders(<GameSessionScreen />);
     serverEmit('session', snapshot());
 
-    fireEvent.press(screen.getByText('Ho finito!'));
+    fireEvent.press(screen.getByLabelText('Ho finito!'));
     expect(socketService.finishGame).not.toHaveBeenCalled();
 
     const buttons = alertSpy.mock.calls[0][2]!;
@@ -142,5 +143,22 @@ describe('GameSessionScreen', () => {
       expect(saved[0].winner).toEqual({ name: 'Luca', score: 5 });
     });
     await waitFor(async () => expect(await SessionStorageService.getActiveSession()).toBeNull());
+  });
+
+  it('in caso di pareggio proclama tutti i vincitori e li salva nello storico', async () => {
+    renderWithProviders(<GameSessionScreen />);
+    serverEmit('gameEnded', {
+      ...snapshot('ended', true),
+      players: [
+        { id: 'p1', name: 'Anna', score: 5, finished: true },
+        { id: 'p2', name: 'Luca', score: 5, finished: true },
+      ],
+    });
+
+    expect(screen.getAllByText('Pareggio tra Anna e Luca con 5 pezzi!').length).toBeGreaterThan(0);
+    await waitFor(async () => {
+      const [saved] = await SessionStorageService.getSavedSessions();
+      expect(saved.winner).toEqual({ name: 'Anna e Luca', score: 5 });
+    });
   });
 });

@@ -183,6 +183,12 @@ export class SessionStorageService {
     }
   }
 
+  // Data di una partita salvata, se in formato ISO (null per le date legacy già formattate)
+  static parseDate(value: string): Date | null {
+    const time = parseIsoDate(value);
+    return time == null ? null : new Date(time);
+  }
+
   // Formatta una data ISO per la visualizzazione; le date legacy già formattate restano invariate
   static formatDate(value: string | Date): string {
     const time = value instanceof Date ? value.getTime() : parseIsoDate(value);

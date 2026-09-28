@@ -43,7 +43,7 @@
 - Crea una sessione con un codice (generato o personalizzato) e invita gli amici con codice o link (`https://sushi.dietalab.net/join/CODICE`).
 - Classifica condivisa aggiornata in tempo reale via WebSocket, con la tua posizione evidenziata.
 - "Aggiungi pezzo" con animazione, suono e pila di sushi con fisica simulata sul thread UI (fluida anche con decine di pezzi); "Annulla ultimo" per correggere un tocco accidentale.
-- "Ho finito!" (con conferma): la partita termina quando tutti hanno finito, con classifica finale e fuochi d'artificio per chi vince.
+- "Ho finito!" (con conferma): la partita termina quando tutti hanno finito, con podio, classifica finale (pareggi inclusi) e una pioggia di petali di ciliegio per chi vince.
 
 **Affidabilità**
 
@@ -111,7 +111,7 @@ sushi-streak-game/
 │   ├── eas.json               Profili di build EAS
 │   ├── assets/                Icone, splash, suoni, immagini del sushi
 │   └── src/
-│       ├── components/        SushiStack, Fireworks, ErrorBoundary, ...
+│       ├── components/        SushiStack (+ motore fisico), SakuraCelebration, ui/ (design system)
 │       ├── navigation/        Stack e tipi delle rotte
 │       ├── screens/           Home, GameSession, SessionHistory, Settings
 │       ├── services/          api, socketService, sessionStorage, preferences, shareService
@@ -246,6 +246,6 @@ Procedura completa e checklist Play Store: **[docs/RELEASING.md](docs/RELEASING.
 
 Distribuito con licenza [MIT](LICENSE). Sviluppato da **Dario Stevanato** ([@Stevatero](https://github.com/Stevatero)).
 
-Font [Joti One](https://fonts.google.com/specimen/Joti+One) (SIL Open Font License) tramite `@expo-google-fonts`.
+Font [Outfit](https://fonts.google.com/specimen/Outfit) (SIL Open Font License) tramite `@expo-google-fonts`.
 
 Contributi benvenuti: vedi [CONTRIBUTING.md](CONTRIBUTING.md) e il [CHANGELOG](CHANGELOG.md).
