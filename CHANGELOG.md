@@ -7,6 +7,15 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 
 ## [Unreleased]
 
+### Modificato
+
+- Nuovo sistema di animazione della pila di sushi: la fisica gira sul thread UI con un motore dedicato (worklet Reanimated) al posto di Matter.js sul thread JS. La caduta resta fluida anche con decine di pezzi, la pila si assesta in modo naturale e a riposo la simulazione si ferma del tutto.
+- Rientrando in una partita già avviata i pezzi cadono uno dopo l'altro invece che tutti insieme.
+
+### Rimosso
+
+- Dipendenza `matter-js`.
+
 ## [1.2.0] - 2026-09-25
 
 Prima versione preparata per la pubblicazione sul Google Play Store.

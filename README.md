@@ -42,7 +42,7 @@
 
 - Crea una sessione con un codice (generato o personalizzato) e invita gli amici con codice o link (`https://sushi.dietalab.net/join/CODICE`).
 - Classifica condivisa aggiornata in tempo reale via WebSocket, con la tua posizione evidenziata.
-- "Aggiungi pezzo" con animazione, suono e pila di sushi con fisica (Matter.js); "Annulla ultimo" per correggere un tocco accidentale.
+- "Aggiungi pezzo" con animazione, suono e pila di sushi con fisica simulata sul thread UI (fluida anche con decine di pezzi); "Annulla ultimo" per correggere un tocco accidentale.
 - "Ho finito!" (con conferma): la partita termina quando tutti hanno finito, con classifica finale e fuochi d'artificio per chi vince.
 
 **Affidabilità**
@@ -73,7 +73,7 @@ L'app non richiede registrazione e non contiene pubblicità, analytics o traccia
 | App              | Expo SDK 54, React Native 0.81 (New Architecture, Hermes), React 19, TypeScript strict |
 | UI e navigazione | React Native Paper (Material 3), React Navigation 7 (native stack), Reanimated 4       |
 | Stato e dati     | Zustand, AsyncStorage, Socket.IO client                                                |
-| Gioco            | Matter.js (fisica della pila di sushi), expo-audio                                     |
+| Gioco            | Motore fisico worklet su Reanimated (pila di sushi), expo-audio                        |
 | Backend          | Node.js ≥ 20, Express 4, Socket.IO 4, SQLite (`sqlite3`), Helmet                       |
 | Qualità          | Jest + Testing Library, node:test, ESLint, Prettier, TypeScript                        |
 | Delivery         | EAS Build/Submit, GitHub Actions, Dependabot, PM2 + nginx                              |
