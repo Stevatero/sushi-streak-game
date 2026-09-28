@@ -36,6 +36,8 @@ const DEFAULT_CONFIG = {
     : DEFAULT_CORS_ORIGINS,
   trustProxy: process.env.TRUST_PROXY || 'loopback',
   androidPackage: process.env.ANDROID_PACKAGE || 'com.stevatero.sushistreakapp',
+  // Dove scaricare l'app se non è installata (default: scheda Google Play del pacchetto)
+  appStoreUrl: process.env.APP_STORE_URL || '',
   // Contatto mostrato nell'informativa privacy (email o URL)
   privacyContact: process.env.PRIVACY_CONTACT || 'https://github.com/Stevatero/sushi-streak-game/issues',
   androidCertFingerprints: (process.env.ANDROID_CERT_SHA256 || '')
@@ -131,7 +133,7 @@ function createServer(options = {}) {
   const config = { ...DEFAULT_CONFIG, ...options };
   const db = openDatabase(config.dbPath);
 
-  // Sessioni attive in memoria: id -> { id, name, status, lastActivity, players: Map<id, player> }
+  // Sessioni attive in memoria: id -> { id, name, status, lastActivity, hostId, players: Map<id, player> }
   const sessions = new Map();
   const pendingLoads = new Map();
 
@@ -145,6 +147,7 @@ function createServer(options = {}) {
       name: session.name,
       status: isOpen(session) ? 'active' : session.status === 'active' ? 'expired' : session.status,
       expiresAt: expiresAt(session),
+      hostId: session.hostId,
       players: [...session.players.values()].map((p) => ({
         id: p.id,
         name: p.name,
@@ -192,6 +195,8 @@ function createServer(options = {}) {
         name: row.name,
         status: row.status || 'active',
         lastActivity: row.last_activity || 0,
+        // Le sessioni create prima della colonna host_id hanno come host il primo giocatore entrato
+        hostId: row.host_id || rows[0]?.id || null,
         players: new Map(
           rows.map((p) => [
             p.id,
@@ -230,6 +235,18 @@ function createServer(options = {}) {
       token,
       player: { id: crypto.randomUUID(), name, score: 0, finished: false, tokenHash: hashToken(token) },
     };
+  }
+
+  // Esegue le modifiche di un giocatore una alla volta: così si può scrivere prima sul database e poi
+  // in memoria senza perdere aggiornamenti quando arrivano più tocchi ravvicinati
+  const playerQueues = new WeakMap();
+  function withPlayerLock(player, task) {
+    const run = (playerQueues.get(player) || Promise.resolve()).then(task);
+    playerQueues.set(
+      player,
+      run.catch(() => undefined)
+    );
+    return run;
   }
 
   // ---------------------------------------------------------------------------
@@ -329,11 +346,13 @@ function createServer(options = {}) {
       }
 
       const now = Date.now();
+      const { player, token } = newPlayer(playerName);
       try {
-        await db.run("INSERT INTO sessions (id, name, status, last_activity) VALUES (?, ?, 'active', ?)", [
+        await db.run("INSERT INTO sessions (id, name, status, last_activity, host_id) VALUES (?, ?, 'active', ?, ?)", [
           sessionId,
           sessionName,
           now,
+          player.id,
         ]);
       } catch (err) {
         if (err.code === 'SQLITE_CONSTRAINT') {
@@ -346,7 +365,6 @@ function createServer(options = {}) {
         throw err;
       }
 
-      const { player, token } = newPlayer(playerName);
       await db.run('INSERT INTO players (id, name, session_id, token, joined_at) VALUES (?, ?, ?, ?, ?)', [
         player.id,
         player.name,
@@ -360,6 +378,7 @@ function createServer(options = {}) {
         name: sessionName,
         status: 'active',
         lastActivity: now,
+        hostId: player.id,
         players: new Map([[player.id, player]]),
       };
       sessions.set(sessionId, session);
@@ -442,7 +461,12 @@ function createServer(options = {}) {
       const session = SESSION_ID_RE.test(sessionId) ? await loadSession(sessionId) : null;
       const nonce = res.locals.cspNonce;
       if (!session) return res.status(404).type('html').send(renderNotFoundPage(nonce));
-      return res.type('html').send(renderJoinPage(shareInfo(session), nonce));
+      return res.type('html').send(
+        renderJoinPage(shareInfo(session), nonce, {
+          androidPackage: config.androidPackage,
+          storeUrl: config.appStoreUrl || `https://play.google.com/store/apps/details?id=${config.androidPackage}`,
+        })
+      );
     })
   );
 
@@ -578,19 +602,26 @@ function createServer(options = {}) {
 
     const changeScore = (delta) =>
       handler(async (payload, ack) => {
-        const { session, player, error } = currentContext();
-        if (error) return ack(error);
+        const context = currentContext();
+        if (context.error) return ack(context.error);
         if (!withinRateLimit()) return ack({ ok: false, code: 'rate_limited', error: 'Stai andando troppo veloce!' });
-        if (player.finished) return ack({ ok: false, code: 'finished', error: 'Hai già finito' });
 
-        const next = Math.min(MAX_SCORE, Math.max(0, player.score + delta));
-        if (next !== player.score) {
-          player.score = next;
-          await db.run('UPDATE players SET score = ? WHERE id = ?', [player.score, player.id]);
-          touch(session);
-          broadcast(session);
-        }
-        return ack({ ok: true, score: player.score });
+        return withPlayerLock(context.player, async () => {
+          // Lo stato va ricontrollato: nel frattempo la partita può essere finita o il giocatore rimosso
+          const { session, player, error } = currentContext();
+          if (error) return ack(error);
+          if (player.finished) return ack({ ok: false, code: 'finished', error: 'Hai già finito' });
+
+          const next = Math.min(MAX_SCORE, Math.max(0, player.score + delta));
+          if (next !== player.score) {
+            // Prima il database, poi la memoria: se la scrittura fallisce il punteggio non cambia
+            await db.run('UPDATE players SET score = ? WHERE id = ?', [next, player.id]);
+            player.score = next;
+            touch(session);
+            broadcast(session);
+          }
+          return ack({ ok: true, score: player.score });
+        });
       });
 
     socket.on('add_piece', changeScore(1));
@@ -599,23 +630,70 @@ function createServer(options = {}) {
     socket.on(
       'player_finished',
       handler(async (payload, ack) => {
+        const context = currentContext();
+        if (context.error) return ack(context.error);
+
+        return withPlayerLock(context.player, async () => {
+          const { session, player, error } = currentContext();
+          if (error) return ack(error);
+          if (!player.finished) {
+            await db.run('UPDATE players SET finished = 1 WHERE id = ?', [player.id]);
+            player.finished = true;
+            touch(session);
+          }
+          await endIfAllFinished(session);
+          return ack({ ok: true });
+        });
+      })
+    );
+
+    // L'host può rimuovere un giocatore (es. chi è entrato indovinando il codice)
+    socket.on(
+      'kick_player',
+      handler(async ({ playerId: targetId }, ack) => {
         const { session, player, error } = currentContext();
         if (error) return ack(error);
-
-        if (!player.finished) {
-          await db.run('UPDATE players SET finished = 1 WHERE id = ?', [player.id]);
-          player.finished = true;
-          touch(session);
+        if (player.id !== session.hostId) {
+          return ack({
+            ok: false,
+            code: 'forbidden',
+            error: 'Solo chi ha creato la partita può rimuovere i giocatori',
+          });
         }
+        if (typeof targetId !== 'string' || targetId === player.id) {
+          return ack({ ok: false, code: 'bad_request', error: 'Giocatore non valido' });
+        }
+        const target = session.players.get(targetId);
+        if (!target) return ack({ ok: false, code: 'not_found', error: 'Giocatore non trovato' });
 
-        const allFinished = [...session.players.values()].every((p) => p.finished);
-        if (allFinished) await closeSession(session, 'ended');
-        broadcast(session);
-        if (allFinished) io.to(session.id).emit('game_ended', publicSession(session));
+        await withPlayerLock(target, async () => {
+          await db.run('DELETE FROM players WHERE id = ?', [target.id]);
+          session.players.delete(target.id);
+        });
+        // I dispositivi del giocatore rimosso escono dalla stanza e vengono avvisati
+        for (const s of await io.in(session.id).fetchSockets()) {
+          if (s.data.playerId !== target.id) continue;
+          s.emit('player_kicked', { sessionId: session.id });
+          s.leave(session.id);
+          s.data.sessionId = null;
+          s.data.playerId = null;
+        }
+        touch(session);
+        logger.info("Giocatore rimosso dall'host", { sessionId: session.id });
+        await endIfAllFinished(session);
         return ack({ ok: true });
       })
     );
   });
+
+  // Chiude la partita se tutti i giocatori rimasti hanno finito, altrimenti aggiorna i client
+  async function endIfAllFinished(session) {
+    const players = [...session.players.values()];
+    const allFinished = players.length > 0 && players.every((p) => p.finished);
+    if (allFinished && session.status === 'active') await closeSession(session, 'ended');
+    io.to(session.id).emit('session_update', publicSession(session));
+    if (allFinished) io.to(session.id).emit('game_ended', publicSession(session));
+  }
 
   // ---------------------------------------------------------------------------
   // Manutenzione periodica: chiusura sessioni inattive e pulizia di quelle vecchie
@@ -623,10 +701,14 @@ function createServer(options = {}) {
   async function sweep() {
     const now = Date.now();
     for (const session of [...sessions.values()]) {
-      if (isExpired(session)) {
+      if (!isExpired(session)) continue;
+      // Un errore su una sessione non deve impedire la chiusura delle altre
+      try {
         await closeSession(session, 'expired');
         io.to(session.id).emit('session_expired', { sessionId: session.id });
         io.in(session.id).socketsLeave(session.id);
+      } catch (err) {
+        logDbError('sweep_session')(err);
       }
     }
     await db.run("UPDATE sessions SET status = 'expired', ended_at = ? WHERE status = 'active' AND last_activity < ?", [

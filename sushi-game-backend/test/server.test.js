@@ -8,6 +8,7 @@ const path = require('path');
 const { io: ioClient } = require('socket.io-client');
 const { execFileSync } = require('child_process');
 const { createServer } = require('../server');
+const { appLinks } = require('../joinPage');
 
 let instance;
 let baseUrl;
@@ -184,4 +185,97 @@ test('la pagina privacy è pubblica e riporta i tempi di conservazione configura
   assert.equal(res.status, 200);
   assert.ok(html.includes('Informativa sulla privacy'));
   assert.ok(html.includes('dopo 30 giorni'));
+});
+
+test('tocchi ravvicinati non perdono punti e il database resta allineato', async () => {
+  const host = (await post('/api/sessions', { sessionName: 'RAPID', playerName: 'Veloce' })).body;
+  const socket = await connect();
+  await emit(socket, 'join_session', { sessionId: 'RAPID', playerId: host.playerId, token: host.playerToken });
+  const results = await Promise.all(Array.from({ length: 5 }, () => emit(socket, 'add_piece')));
+  assert.deepEqual(
+    results.map((r) => r.score),
+    [1, 2, 3, 4, 5]
+  );
+
+  // Dopo un "riavvio" il punteggio letto dal database è lo stesso
+  instance.sessions.clear();
+  const info = await (await fetch(`${baseUrl}/api/sessions/RAPID/info`)).json();
+  assert.equal(info.players[0].score, 5);
+});
+
+test("l'host può rimuovere un giocatore, gli altri no", async () => {
+  const host = (await post('/api/sessions', { sessionName: 'KICK', playerName: 'Host' })).body;
+  const guest = (await post('/api/sessions/join', { sessionId: 'KICK', playerName: 'Ospite' })).body;
+  const hostSocket = await connect();
+  const guestSocket = await connect();
+  const joined = await emit(hostSocket, 'join_session', {
+    sessionId: 'KICK',
+    playerId: host.playerId,
+    token: host.playerToken,
+  });
+  assert.equal(joined.session.hostId, host.playerId);
+  await emit(guestSocket, 'join_session', { sessionId: 'KICK', playerId: guest.playerId, token: guest.playerToken });
+
+  const forbidden = await emit(guestSocket, 'kick_player', { playerId: host.playerId });
+  assert.equal(forbidden.code, 'forbidden');
+  assert.equal((await emit(hostSocket, 'kick_player', { playerId: host.playerId })).code, 'bad_request');
+
+  const kicked = new Promise((resolve) => guestSocket.on('player_kicked', resolve));
+  assert.equal((await emit(hostSocket, 'kick_player', { playerId: guest.playerId })).ok, true);
+  assert.deepEqual(await kicked, { sessionId: 'KICK' });
+
+  // Il giocatore rimosso non può più giocare né rientrare con le vecchie credenziali
+  assert.equal((await emit(guestSocket, 'add_piece')).ok, false);
+  const rejoin = await emit(guestSocket, 'join_session', {
+    sessionId: 'KICK',
+    playerId: guest.playerId,
+    token: guest.playerToken,
+  });
+  assert.equal(rejoin.code, 'unauthorized');
+  const info = await (await fetch(`${baseUrl}/api/sessions/KICK/info`)).json();
+  assert.deepEqual(
+    info.players.map((p) => p.name),
+    ['Host']
+  );
+});
+
+test("rimuovendo l'ultimo giocatore che non ha finito la partita si chiude", async () => {
+  const host = (await post('/api/sessions', { sessionName: 'KICK-END', playerName: 'Host' })).body;
+  const guest = (await post('/api/sessions/join', { sessionId: 'KICK-END', playerName: 'Lento' })).body;
+  const socket = await connect();
+  await emit(socket, 'join_session', { sessionId: 'KICK-END', playerId: host.playerId, token: host.playerToken });
+  await emit(socket, 'player_finished');
+
+  const ended = new Promise((resolve) => socket.on('game_ended', resolve));
+  await emit(socket, 'kick_player', { playerId: guest.playerId });
+  const session = await ended;
+  assert.equal(session.status, 'ended');
+  assert.equal(session.players.length, 1);
+});
+
+test("l'host viene ricordato dopo un riavvio", async () => {
+  const host = (await post('/api/sessions', { sessionName: 'HOST-DB', playerName: 'Host' })).body;
+  await post('/api/sessions/join', { sessionId: 'HOST-DB', playerName: 'Ospite' });
+  instance.sessions.clear();
+  const socket = await connect();
+  const joined = await emit(socket, 'join_session', {
+    sessionId: 'HOST-DB',
+    playerId: host.playerId,
+    token: host.playerToken,
+  });
+  assert.equal(joined.session.hostId, host.playerId);
+});
+
+test("la pagina di invito apre l'app con un intent Android e rimanda allo store se manca", async () => {
+  await post('/api/sessions', { sessionName: 'STORE', playerName: 'Anna' });
+  const html = await (await fetch(`${baseUrl}/join/STORE`)).text();
+  assert.ok(html.includes('intent://join/STORE#Intent;scheme=sushi-streak;package=com.stevatero.sushistreakapp;'));
+  assert.ok(html.includes('S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3D'));
+  assert.ok(html.includes('href="https://play.google.com/store/apps/details?id=com.stevatero.sushistreakapp"'));
+});
+
+test('i link della pagina di invito scartano pacchetti e URL non validi', () => {
+  const links = appLinks('ABC', { androidPackage: 'x;S.evil=1', storeUrl: 'javascript:alert(1)' });
+  assert.equal(links.androidIntent, 'intent://join/ABC#Intent;scheme=sushi-streak;end');
+  assert.equal(links.storeUrl, null);
 });

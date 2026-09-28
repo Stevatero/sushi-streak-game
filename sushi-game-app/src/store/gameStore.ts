@@ -3,7 +3,7 @@ import socketService, { AckResponse, ConnectionStatus, Player, SessionSnapshot }
 
 export type { Player } from '../services/socketService';
 
-export type SessionEndReason = 'ended' | 'expired' | 'unauthorized' | 'not_found' | null;
+export type SessionEndReason = 'ended' | 'expired' | 'unauthorized' | 'not_found' | 'kicked' | null;
 
 interface StartSessionParams {
   sessionId: string;
@@ -20,6 +20,7 @@ interface GameState {
   playerId: string | null;
   playerName: string | null;
   isHost: boolean;
+  hostId: string | null;
   players: Player[];
   status: SessionSnapshot['status'] | null;
   expiresAt: number | null;
@@ -31,6 +32,7 @@ interface GameState {
   addPiece: () => Promise<AckResponse>;
   removePiece: () => Promise<AckResponse>;
   finishGame: () => Promise<AckResponse>;
+  kickPlayer: (playerId: string) => Promise<AckResponse>;
   resetGame: () => void;
 }
 
@@ -40,6 +42,7 @@ const initialState = {
   playerId: null,
   playerName: null,
   isHost: false,
+  hostId: null as string | null,
   players: [] as Player[],
   status: null,
   expiresAt: null,
@@ -63,6 +66,7 @@ const useGameStore = create<GameState>((set, get) => ({
   addPiece: () => socketService.addPiece(),
   removePiece: () => socketService.removePiece(),
   finishGame: () => socketService.finishGame(),
+  kickPlayer: (playerId) => socketService.kickPlayer(playerId),
 
   resetGame: () => {
     socketService.leaveSession();
@@ -77,6 +81,7 @@ const applySnapshot = (snapshot: SessionSnapshot) => {
   const ended = snapshot.status !== 'active';
   useGameStore.setState({
     players: snapshot.players,
+    hostId: snapshot.hostId ?? null,
     status: snapshot.status,
     expiresAt: snapshot.expiresAt,
     gameEnded: ended,
@@ -90,6 +95,11 @@ socketService.on('connection', (connection) => useGameStore.setState({ connectio
 socketService.on('sessionExpired', ({ sessionId }) => {
   if (useGameStore.getState().sessionId === sessionId) {
     useGameStore.setState({ status: 'expired', gameEnded: true, endReason: 'expired' });
+  }
+});
+socketService.on('kicked', ({ sessionId }) => {
+  if (useGameStore.getState().sessionId === sessionId) {
+    useGameStore.setState({ gameEnded: true, endReason: 'kicked' });
   }
 });
 socketService.on('joinFailed', (response) => {

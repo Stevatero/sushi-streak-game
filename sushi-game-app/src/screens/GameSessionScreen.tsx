@@ -46,20 +46,33 @@ const GameSessionScreen = () => {
   const insets = useSafeAreaInsets();
   const { sessionId, sessionName, playerName, playerId, playerToken, isHost } = route.params;
 
-  const { players, gameEnded, endReason, connection, status, startSession, addPiece, removePiece, finishGame } =
-    useGameStore(
-      useShallow((s) => ({
-        players: s.players,
-        gameEnded: s.gameEnded,
-        endReason: s.endReason,
-        connection: s.connection,
-        status: s.status,
-        startSession: s.startSession,
-        addPiece: s.addPiece,
-        removePiece: s.removePiece,
-        finishGame: s.finishGame,
-      }))
-    );
+  const {
+    players,
+    hostId,
+    gameEnded,
+    endReason,
+    connection,
+    status,
+    startSession,
+    addPiece,
+    removePiece,
+    finishGame,
+    kickPlayer,
+  } = useGameStore(
+    useShallow((s) => ({
+      players: s.players,
+      hostId: s.hostId,
+      gameEnded: s.gameEnded,
+      endReason: s.endReason,
+      connection: s.connection,
+      status: s.status,
+      startSession: s.startSession,
+      addPiece: s.addPiece,
+      removePiece: s.removePiece,
+      finishGame: s.finishGame,
+      kickPlayer: s.kickPlayer,
+    }))
+  );
 
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [showSaveModal, setShowSaveModal] = useState(false);
@@ -95,6 +108,8 @@ const GameSessionScreen = () => {
         ? `Pareggio tra ${winners.map((p) => p.name).join(' e ')} con ${topScore} pezzi!`
         : `Vince ${winners[0].name} con ${topScore} pezzi!`;
   const isOnline = connection === 'connected';
+  // Solo con un server che indica l'host (1.3+) si possono rimuovere i giocatori
+  const amHost = !!hostId && hostId === playerId;
   const canShare = status === 'active' && !gameEnded;
 
   // Avvio o ripresa della partita: il socket si (ri)collega con le credenziali del giocatore
@@ -177,8 +192,10 @@ const GameSessionScreen = () => {
 
   // Salvataggio automatico nello storico quando il giocatore ha finito o la partita è chiusa
   useEffect(() => {
-    if (hasFinished || gameEnded) persistResult(players);
-  }, [players, hasFinished, gameEnded, persistResult]);
+    // Chi è stato rimosso o non può rientrare non salva la partita nello storico
+    const excluded = endReason === 'kicked' || endReason === 'unauthorized' || endReason === 'not_found';
+    if ((hasFinished || gameEnded) && !excluded) persistResult(players);
+  }, [players, hasFinished, gameEnded, endReason, persistResult]);
 
   // Gestione della fine partita (tutti hanno finito, scadenza o credenziali non valide)
   useEffect(() => {
@@ -198,6 +215,10 @@ const GameSessionScreen = () => {
         'Sessione scaduta',
         'La sessione è stata chiusa per inattività. I punteggi sono stati salvati nello storico.'
       );
+    } else if (endReason === 'kicked') {
+      Alert.alert('Sei stato rimosso dalla partita', 'Chi ha creato la partita ti ha tolto dalla classifica.', [
+        { text: 'OK', onPress: () => goHome() },
+      ]);
     } else if (endReason === 'unauthorized' || endReason === 'not_found') {
       Alert.alert('Sessione non disponibile', 'Non è possibile rientrare in questa partita.', [
         { text: 'OK', onPress: () => goHome() },
@@ -291,10 +312,35 @@ const GameSessionScreen = () => {
     );
   };
 
+  const confirmKick = (target: Player) => {
+    Alert.alert(`Rimuovere ${target.name}?`, 'Il giocatore uscirà dalla partita e dalla classifica.', [
+      { text: 'Annulla', style: 'cancel' },
+      {
+        text: 'Rimuovi',
+        style: 'destructive',
+        onPress: async () => {
+          const res = await kickPlayer(target.id);
+          setSnackbar(res.ok ? `${target.name} è stato rimosso` : res.error || 'Impossibile rimuovere il giocatore');
+        },
+      },
+    ]);
+  };
+
   const renderPlayerRow = (item: Player) => {
     const isMe = item.id === playerId;
+    const canKick = amHost && !isMe && !gameEnded;
     return (
-      <View style={[styles.playerRow, isMe && { backgroundColor: colors.primaryContainer }]}>
+      <Pressable
+        onPress={canKick ? () => confirmKick(item) : undefined}
+        disabled={!canKick}
+        accessibilityRole={canKick ? 'button' : undefined}
+        accessibilityHint={canKick ? 'Rimuovi il giocatore dalla partita' : undefined}
+        style={({ pressed }) => [
+          styles.playerRow,
+          isMe && { backgroundColor: colors.primaryContainer },
+          pressed && { backgroundColor: colors.surfaceVariant },
+        ]}
+      >
         {renderRankBadge(rankOf(players, item.score))}
         <Text
           style={[styles.playerName, { color: isMe ? colors.onPrimaryContainer : colors.onSurface }]}
@@ -303,13 +349,21 @@ const GameSessionScreen = () => {
           {item.name}
           {isMe ? ' (tu)' : ''}
         </Text>
+        {item.id === hostId ? (
+          <MaterialCommunityIcons
+            name="crown-outline"
+            size={16}
+            color={isMe ? colors.onPrimaryContainer : colors.gold}
+            accessibilityLabel="Host"
+          />
+        ) : null}
         {item.finished ? (
           <Tag label="Finito" kanji="完" color={colors.onTertiaryContainer} background={colors.tertiaryContainer} />
         ) : null}
         <Text style={[styles.playerScore, { color: isMe ? colors.onPrimaryContainer : colors.onSurface }]}>
           {item.score}
         </Text>
-      </View>
+      </Pressable>
     );
   };
 
@@ -406,6 +460,11 @@ const GameSessionScreen = () => {
           style={styles.liveList}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
+        {amHost && players.length > 1 && !gameEnded ? (
+          <Text style={[typography.caption, styles.hostHint, { color: colors.onSurfaceVariant }]}>
+            Hai creato tu la partita: tocca un giocatore per rimuoverlo.
+          </Text>
+        ) : null}
       </Panel>
 
       <View style={styles.flex} pointerEvents="none" />
@@ -738,6 +797,10 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 2,
+  },
+  hostHint: {
+    marginTop: 6,
+    textAlign: 'center',
   },
   controls: {
     paddingHorizontal: 16,

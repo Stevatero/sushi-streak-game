@@ -103,4 +103,15 @@ describe('gameStore', () => {
     expect(socketService.leaveSession).toHaveBeenCalled();
     expect(useGameStore.getState()).toMatchObject({ sessionId: null, players: [], gameEnded: false });
   });
+
+  it("memorizza l'host e chiude la partita quando si viene rimossi", () => {
+    start();
+    emit('session', { id: 'CENA', name: 'Cena', status: 'active', expiresAt: 123, hostId: 'p2', players });
+    expect(useGameStore.getState().hostId).toBe('p2');
+
+    emit('kicked', { sessionId: 'ALTRA' });
+    expect(useGameStore.getState().gameEnded).toBe(false);
+    emit('kicked', { sessionId: 'CENA' });
+    expect(useGameStore.getState()).toMatchObject({ gameEnded: true, endReason: 'kicked' });
+  });
 });

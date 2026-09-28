@@ -12,6 +12,8 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 - Podio nella classifica finale e gestione dei pareggi: a pari punteggio si condivide la posizione e la vittoria (anche nello storico).
 - Home: pulsante "Incolla" che riconosce codici e link di invito copiati.
 - Storico: riepilogo con partite giocate, pezzi mangiati e record.
+- Chi crea la partita può rimuovere un giocatore toccandolo in classifica; il giocatore rimosso viene avvisato e non può rientrare con le vecchie credenziali.
+- Pagina di invito: su Android il pulsante "Apri nell'app" porta allo store se l'app non è installata (`APP_STORE_URL`, default Google Play) ed è presente un link per scaricarla.
 
 ### Modificato
 
@@ -27,7 +29,9 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 - Un doppio tocco su "Crea"/"Unisciti" poteva inviare due richieste al server.
 - Il suono di vittoria veniva riprodotto anche quando si segnava solo la fine dei propri pezzi.
 - Impostazioni: la licenza indicata nei crediti ("Tutti i diritti riservati") non corrispondeva alla licenza MIT del progetto.
-- Backend: in caso di errore del database il giocatore poteva risultare "finito" in memoria ma non su disco.
+- Backend: in caso di errore del database punteggio e stato "finito" potevano cambiare in memoria ma non su disco. Le modifiche di ogni giocatore ora sono serializzate e scritte prima sul database, senza perdere tocchi ravvicinati.
+- Backend: un errore nella chiusura di una sessione scaduta non blocca più la chiusura delle altre.
+- Pagina di invito: niente più tentativi di apertura dell'app su iOS (non supportato) e nessun errore su Android se l'app non è installata.
 
 ### Rimosso
 

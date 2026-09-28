@@ -15,6 +15,8 @@ export interface SessionSnapshot {
   name: string;
   status: 'active' | 'ended' | 'expired';
   expiresAt: number;
+  // Creatore della partita (assente con i server precedenti alla 1.3)
+  hostId?: string | null;
   players: Player[];
 }
 
@@ -38,6 +40,7 @@ type Events = {
   session: SessionSnapshot;
   gameEnded: SessionSnapshot;
   sessionExpired: { sessionId: string };
+  kicked: { sessionId: string };
   connection: ConnectionStatus;
   joinFailed: AckResponse;
 };
@@ -116,6 +119,7 @@ class SocketService {
     socket.on('session_update', (data: SessionSnapshot) => this.emitLocal('session', data));
     socket.on('game_ended', (data: SessionSnapshot) => this.emitLocal('gameEnded', data));
     socket.on('session_expired', (data: { sessionId: string }) => this.emitLocal('sessionExpired', data));
+    socket.on('player_kicked', (data: { sessionId: string }) => this.emitLocal('kicked', data));
 
     this.socket = socket;
     return socket;
@@ -182,6 +186,11 @@ class SocketService {
 
   finishGame() {
     return this.request('player_finished');
+  }
+
+  // Solo l'host: rimuove un giocatore dalla partita
+  kickPlayer(playerId: string) {
+    return this.request('kick_player', { playerId });
   }
 }
 
