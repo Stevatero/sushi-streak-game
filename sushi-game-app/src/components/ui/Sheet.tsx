@@ -16,6 +16,10 @@ interface SheetProps {
   overlay?: React.ReactNode;
 }
 
+// Durata della dissolvenza di chiusura della Modal. Su iOS una finestra modale non si apre mentre
+// un'altra si sta chiudendo: prima di aprirne una nuova (o di cambiare schermata) si attende questo tempo
+export const SHEET_CLOSE_MS = 350;
+
 // Pannello che sale dal basso, usato per tutte le finestre modali dell'app
 const Sheet: React.FC<SheetProps> = ({ visible, onClose, title, kanji, children, dismissable = true, overlay }) => {
   const { colors } = useAppTheme();

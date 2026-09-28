@@ -1,11 +1,13 @@
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { LayoutChangeEvent, Platform, StyleSheet, View } from 'react-native';
 import Animated, {
+  Easing,
   FrameInfo,
   SharedValue,
   useAnimatedStyle,
   useFrameCallback,
   useSharedValue,
+  withTiming,
 } from 'react-native-reanimated';
 import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 import {
@@ -32,10 +34,15 @@ import { createPieceShape, createSpawnParams, PieceShape, SUSHI_KINDS } from './
  * La simulazione gira sul thread UI (frame callback di Reanimated) e i pezzi leggono la propria
  * posizione direttamente dallo stato fisico condiviso: nessun passaggio dal thread JS né render React
  * per frame. Quando la pila è ferma il frame callback si spegne, quindi a riposo non consuma nulla.
+ *
+ * Annullando un pezzo, l'ultimo arrivato fa un piccolo "pop" (si gonfia, ruota e svanisce) e solo
+ * dopo esce dalla simulazione, così i pezzi sopra ricadono nello spazio lasciato libero.
  */
 
 // Intervallo tra un pezzo e l'altro quando ne vanno aggiunti molti insieme (es. rientro in partita)
 const STAGGER_MS = 70;
+// Durata dell'effetto di scomparsa di un pezzo annullato
+export const VANISH_MS = 320;
 const IS_WEB = Platform.OS === 'web';
 
 interface SushiStackProps {
@@ -45,6 +52,7 @@ interface SushiStackProps {
 interface Sprite extends PieceShape {
   id: number;
   slot: number;
+  vanishing?: boolean;
 }
 
 interface Spawn {
@@ -69,21 +77,36 @@ function resizeWorld(world: SharedValue<number[]>, width: number, height: number
   world.modify();
 }
 
-const HIDDEN_TRANSFORM = [{ translateX: 0 }, { translateY: -10000 }, { rotate: '0rad' }, { translateY: 0 }];
+const HIDDEN_STYLE = {
+  opacity: 1,
+  transform: [{ translateX: 0 }, { translateY: -10000 }, { rotate: '0rad' }, { translateY: 0 }, { scale: 1 }],
+};
 
 const SushiSprite = memo(function SushiSprite({ sprite, world }: { sprite: Sprite; world: SharedValue<number[]> }) {
-  const { slot, width, height, offsetY, kind } = sprite;
+  const { slot, width, height, offsetY, kind, vanishing } = sprite;
+  // 0 → 1 durante la scomparsa
+  const vanish = useSharedValue(0);
+
+  useEffect(() => {
+    if (vanishing) vanish.value = withTiming(1, { duration: VANISH_MS, easing: Easing.inOut(Easing.quad) });
+  }, [vanishing, vanish]);
+
   const animatedStyle = useAnimatedStyle(() => {
     // Sul thread JS (primo render) non si legge lo stato fisico: richiederebbe una copia sincrona
-    if (!globalThis._WORKLET && !IS_WEB) return { transform: HIDDEN_TRANSFORM };
+    if (!globalThis._WORKLET && !IS_WEB) return HIDDEN_STYLE;
     const w = world.value;
     const o = bodyOffset(slot);
+    const v = vanish.value;
+    // "Pop": prima si gonfia un poco, poi si rimpicciolisce ruotando e sfuma
+    const scale = v < 0.3 ? 1 + v * 0.6 : 1.18 * (1 - (v - 0.3) / 0.7);
     return {
+      opacity: 1 - v * v,
       transform: [
         { translateX: w[o + B_X] - width / 2 },
         { translateY: w[o + B_Y] - height / 2 },
-        { rotate: `${w[o + B_ANGLE]}rad` },
+        { rotate: `${w[o + B_ANGLE] + v * 1.4}rad` },
         { translateY: offsetY },
+        { scale },
       ],
     };
   });
@@ -105,6 +128,9 @@ const SushiStack: React.FC<SushiStackProps> = ({ pieceCount }) => {
   const [layout, setLayout] = useState<{ width: number; height: number } | null>(null);
 
   const spritesRef = useRef<Sprite[]>([]);
+  // Pezzi annullati che stanno ancora svanendo (occupano lo slot fino alla fine dell'effetto)
+  const vanishingRef = useRef<Sprite[]>([]);
+  const vanishTimersRef = useRef(new Set<ReturnType<typeof setTimeout>>());
   const layoutRef = useRef(layout);
   const targetRef = useRef(pieceCount);
   // Pezzi "logici" (punteggio) già rappresentati, anche se i più vecchi sono stati tolti per il limite
@@ -144,7 +170,37 @@ const SushiStack: React.FC<SushiStackProps> = ({ pieceCount }) => {
     return seqRef.current;
   }, []);
 
-  // Porta i pezzi visibili al punteggio: annullamenti subito, aggiunte una alla volta
+  const publish = useCallback((active: Sprite[]) => {
+    spritesRef.current = active;
+    setSprites([...active, ...vanishingRef.current]);
+  }, []);
+
+  // Fine dell'effetto: il pezzo esce dalla simulazione e quelli sopra ricadono
+  const finishVanish = useCallback(
+    (sprite: Sprite) => {
+      vanishingRef.current = vanishingRef.current.filter((s) => s.id !== sprite.id);
+      freeSlotsRef.current.push(sprite.slot);
+      scheduleOnUI(syncWorld, world, [sprite.slot], [], wake());
+      frameCallbackRef.current?.setActive(true);
+      publish(spritesRef.current);
+    },
+    [world, wake, publish]
+  );
+
+  const startVanish = useCallback(
+    (sprite: Sprite) => {
+      const leaving = { ...sprite, vanishing: true };
+      vanishingRef.current = [...vanishingRef.current, leaving];
+      const timer = setTimeout(() => {
+        vanishTimersRef.current.delete(timer);
+        finishVanish(leaving);
+      }, VANISH_MS);
+      vanishTimersRef.current.add(timer);
+    },
+    [finishVanish]
+  );
+
+  // Porta i pezzi visibili al punteggio: annullamenti subito (con effetto), aggiunte una alla volta
   const pump = useCallback(() => {
     timerRef.current = null;
     const size = layoutRef.current;
@@ -156,13 +212,14 @@ const SushiStack: React.FC<SushiStackProps> = ({ pieceCount }) => {
     let list = spritesRef.current;
     const removals: number[] = [];
     const spawns: Spawn[] = [];
+    let vanished = false;
 
     while (represented > target) {
       const last = list[list.length - 1];
       if (last) {
-        removals.push(last.slot);
-        freeSlots.push(last.slot);
         list = list.slice(0, -1);
+        startVanish(last);
+        vanished = true;
       }
       represented -= 1;
     }
@@ -172,7 +229,7 @@ const SushiStack: React.FC<SushiStackProps> = ({ pieceCount }) => {
     if (target - represented > MAX_BODIES) represented = target - MAX_BODIES;
 
     if (represented < target) {
-      if (list.length >= MAX_BODIES) {
+      if (list.length + vanishingRef.current.length >= MAX_BODIES && list.length > 0) {
         const oldest = list[0];
         removals.push(oldest.slot);
         freeSlots.push(oldest.slot);
@@ -191,11 +248,10 @@ const SushiStack: React.FC<SushiStackProps> = ({ pieceCount }) => {
     if (removals.length > 0 || spawns.length > 0) {
       scheduleOnUI(syncWorld, world, removals, spawns, wake());
       frameCallbackRef.current?.setActive(true);
-      spritesRef.current = list;
-      setSprites(list);
     }
+    if (removals.length > 0 || spawns.length > 0 || vanished) publish(list);
     if (represented < target) timerRef.current = setTimeout(pump, STAGGER_MS);
-  }, [world, wake]);
+  }, [world, wake, publish, startVanish]);
 
   useEffect(() => {
     if (!layout) return;
@@ -211,12 +267,13 @@ const SushiStack: React.FC<SushiStackProps> = ({ pieceCount }) => {
     pump();
   }, [pieceCount, layout, pump]);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    const vanishTimers = vanishTimersRef.current;
+    return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
-    },
-    []
-  );
+      vanishTimers.forEach(clearTimeout);
+    };
+  }, []);
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;

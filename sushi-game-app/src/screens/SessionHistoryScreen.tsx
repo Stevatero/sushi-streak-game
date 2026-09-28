@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, Alert } from 'react-native';
-import { IconButton } from 'react-native-paper';
+import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
+import { IconButton, Snackbar } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SessionStorageService, SavedSession } from '../services/sessionStorage';
 import { fonts, radii, typography, useAppTheme } from '../theme/theme';
+import { useExclusiveModal } from '../hooks/useExclusiveModal';
 import AppButton from '../components/ui/AppButton';
+import ConfirmSheet, { ConfirmOptions } from '../components/ui/ConfirmSheet';
 import Hanko from '../components/ui/Hanko';
 import Panel from '../components/ui/Panel';
 import ScreenHeader from '../components/ui/ScreenHeader';
@@ -21,7 +23,11 @@ const SessionHistoryScreen = () => {
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
+  // La partita selezionata resta impostata anche a finestra chiusa, per la dissolvenza di chiusura
   const [selectedSession, setSelectedSession] = useState<SavedSession | null>(null);
+  const { modal, openModal, closeModal } = useExclusiveModal<'detail' | 'confirm'>();
+  const [dialog, setDialog] = useState<ConfirmOptions | null>(null);
+  const [snackbar, setSnackbar] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -33,28 +39,37 @@ const SessionHistoryScreen = () => {
       const sessions = await SessionStorageService.getSavedSessions();
       setSavedSessions(sessions);
     } catch {
-      Alert.alert('Errore', 'Impossibile caricare le sessioni salvate');
+      setSnackbar('Impossibile caricare le partite salvate');
     } finally {
       setLoading(false);
     }
   };
 
-  const deleteSession = (sessionId: string) => {
-    Alert.alert('Elimina partita', 'Sei sicuro di voler eliminare questa partita dallo storico?', [
-      { text: 'Annulla', style: 'cancel' },
-      {
-        text: 'Elimina',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await SessionStorageService.deleteSession(sessionId);
-            await loadSavedSessions();
-          } catch {
-            Alert.alert('Errore', 'Impossibile eliminare la sessione');
-          }
-        },
+  const deleteSession = (session: SavedSession) => {
+    setDialog({
+      seal: '消',
+      title: 'Eliminare la partita?',
+      message: `"${session.sessionName}" verrà tolta dallo storico di questo dispositivo.`,
+      confirmLabel: 'Elimina',
+      confirmIcon: 'trash-can-outline',
+      destructive: true,
+      cancelLabel: 'Annulla',
+      onConfirm: async () => {
+        try {
+          await SessionStorageService.deleteSession(session.id);
+          await loadSavedSessions();
+          setSnackbar('Partita eliminata');
+        } catch {
+          setSnackbar('Impossibile eliminare la partita');
+        }
       },
-    ]);
+    });
+    openModal('confirm');
+  };
+
+  const showDetail = (session: SavedSession) => {
+    setSelectedSession(session);
+    openModal('detail');
   };
 
   const stats = useMemo(() => {
@@ -86,7 +101,7 @@ const SessionHistoryScreen = () => {
   };
 
   const renderSessionItem = ({ item }: { item: SavedSession }) => (
-    <Pressable onPress={() => setSelectedSession(item)} accessibilityRole="button">
+    <Pressable onPress={() => showDetail(item)} accessibilityRole="button">
       {({ pressed }) => (
         <Panel style={[styles.sessionCard, pressed && { opacity: 0.85 }]}>
           <View style={styles.sessionRow}>
@@ -116,7 +131,7 @@ const SessionHistoryScreen = () => {
               accessibilityLabel="Elimina partita"
               size={20}
               iconColor={colors.onSurfaceVariant}
-              onPress={() => deleteSession(item.id)}
+              onPress={() => deleteSession(item)}
               style={styles.deleteButton}
             />
           </View>
@@ -171,12 +186,7 @@ const SessionHistoryScreen = () => {
       )}
 
       {/* Dettaglio partita */}
-      <Sheet
-        visible={!!selectedSession}
-        onClose={() => setSelectedSession(null)}
-        title={selectedSession?.sessionName}
-        kanji="結果"
-      >
+      <Sheet visible={modal === 'detail'} onClose={closeModal} title={selectedSession?.sessionName} kanji="結果">
         {selectedSession ? (
           <>
             <View style={[styles.detailBox, { backgroundColor: colors.surfaceVariant }]}>
@@ -221,10 +231,21 @@ const SessionHistoryScreen = () => {
                 );
               }}
             />
-            <AppButton label="Chiudi" variant="tonal" onPress={() => setSelectedSession(null)} />
+            <AppButton label="Chiudi" variant="tonal" onPress={closeModal} />
           </>
         ) : null}
       </Sheet>
+
+      <ConfirmSheet options={modal === 'confirm' ? dialog : null} onClose={closeModal} />
+
+      <Snackbar
+        visible={!!snackbar}
+        onDismiss={() => setSnackbar('')}
+        duration={2500}
+        style={[styles.snackbar, { marginBottom: insets.bottom + 8 }]}
+      >
+        {snackbar}
+      </Snackbar>
     </View>
   );
 };
@@ -339,6 +360,9 @@ const styles = StyleSheet.create({
   playerScore: {
     fontFamily: fonts.bold,
     fontSize: 17,
+  },
+  snackbar: {
+    marginHorizontal: 16,
   },
 });
 

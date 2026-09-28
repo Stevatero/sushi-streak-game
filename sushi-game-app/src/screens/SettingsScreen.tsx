@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Switch, Pressable, ScrollView, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, Switch, Pressable, ScrollView, Linking } from 'react-native';
 import { SegmentedButtons, Snackbar } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -12,8 +12,10 @@ import { shareService } from '../services/shareService';
 import { preferences, ThemePreference } from '../services/preferences';
 import { APP_VARIANT, APP_VERSION, PRIVACY_POLICY_URL } from '../config';
 import { logger } from '../utils/logger';
+import { useExclusiveModal } from '../hooks/useExclusiveModal';
 import { fonts, radii, typography, useAppTheme } from '../theme/theme';
 import AppButton from '../components/ui/AppButton';
+import ConfirmSheet, { ConfirmOptions } from '../components/ui/ConfirmSheet';
 import Panel from '../components/ui/Panel';
 import ScreenHeader from '../components/ui/ScreenHeader';
 import SectionTitle from '../components/ui/SectionTitle';
@@ -59,7 +61,8 @@ const SettingsScreen = () => {
   const insets = useSafeAreaInsets();
   const { preference, setPreference } = useColorScheme();
   const [soundEnabled, setSoundEnabled] = useState(SoundManager.isSoundEnabled());
-  const [showShareModal, setShowShareModal] = useState(false);
+  const { modal, openModal, closeModal } = useExclusiveModal<'share' | 'confirm'>();
+  const [dialog, setDialog] = useState<ConfirmOptions | null>(null);
   const [snackbar, setSnackbar] = useState('');
 
   const { sessionId, sessionName, gameEnded, status } = useGameStore(
@@ -77,14 +80,14 @@ const SettingsScreen = () => {
   const copySessionCode = async () => {
     if (!sessionId) return;
     const success = await shareService.copySessionCode(sessionId);
-    setShowShareModal(false);
+    closeModal();
     setSnackbar(success ? 'Codice sessione copiato!' : 'Impossibile copiare il codice');
   };
 
   const shareSessionLink = async () => {
     if (!sessionId || !sessionName) return;
     const result = await shareService.shareSession(sessionId, sessionName);
-    setShowShareModal(false);
+    closeModal();
     if (result === 'error') setSnackbar('Impossibile condividere il link');
   };
 
@@ -97,30 +100,32 @@ const SettingsScreen = () => {
     }
   };
 
+  const clearLocalData = async () => {
+    try {
+      await preferences.clearAllLocalData();
+      setPreference('system');
+      SoundManager.setSoundEnabled(true);
+      setSoundEnabled(true);
+      setSnackbar('Dati locali cancellati');
+    } catch (error) {
+      logger.error('Cancellazione dati locali non riuscita', error);
+      setSnackbar('Impossibile cancellare i dati');
+    }
+  };
+
   const confirmClearLocalData = () => {
-    Alert.alert(
-      'Cancellare i dati locali?',
-      "Verranno eliminati da questo dispositivo lo storico delle partite, il nome salvato e le preferenze. L'operazione non si può annullare.",
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Cancella',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await preferences.clearAllLocalData();
-              setPreference('system');
-              SoundManager.setSoundEnabled(true);
-              setSoundEnabled(true);
-              setSnackbar('Dati locali cancellati');
-            } catch (error) {
-              logger.error('Cancellazione dati locali non riuscita', error);
-              setSnackbar('Impossibile cancellare i dati');
-            }
-          },
-        },
-      ]
-    );
+    setDialog({
+      seal: '消',
+      title: 'Cancellare i dati locali?',
+      message:
+        "Verranno eliminati da questo dispositivo lo storico delle partite, il nome salvato e le preferenze. L'operazione non si può annullare.",
+      confirmLabel: 'Cancella i dati',
+      confirmIcon: 'delete-outline',
+      destructive: true,
+      cancelLabel: 'Annulla',
+      onConfirm: clearLocalData,
+    });
+    openModal('confirm');
   };
 
   const toggleSound = () => {
@@ -179,7 +184,7 @@ const SettingsScreen = () => {
                   subtitle={
                     canShare ? `Codice ${sessionId}` : gameEnded ? 'Sessione terminata' : 'Condivisione non disponibile'
                   }
-                  onPress={() => setShowShareModal(true)}
+                  onPress={() => openModal('share')}
                   disabled={!canShare}
                 />
               </Panel>
@@ -223,7 +228,7 @@ const SettingsScreen = () => {
         </View>
       </ScrollView>
 
-      <Sheet visible={showShareModal} onClose={() => setShowShareModal(false)} title="Invita amici" kanji="招待">
+      <Sheet visible={modal === 'share'} onClose={closeModal} title="Invita amici" kanji="招待">
         <View style={[styles.codeBox, { borderColor: colors.outline, backgroundColor: colors.surfaceVariant }]}>
           <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>Codice</Text>
           <Text style={[styles.codeText, { color: colors.onSurface }]} selectable>
@@ -235,6 +240,8 @@ const SettingsScreen = () => {
           <AppButton label="Copia codice" icon="content-copy" variant="tonal" onPress={copySessionCode} />
         </View>
       </Sheet>
+
+      <ConfirmSheet options={modal === 'confirm' ? dialog : null} onClose={closeModal} />
 
       <Snackbar visible={!!snackbar} onDismiss={() => setSnackbar('')} duration={2500}>
         {snackbar}

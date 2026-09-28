@@ -2,7 +2,7 @@
 import React from 'react';
 import { Image } from 'react-native';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
-import SushiStack from '../SushiStack';
+import SushiStack, { VANISH_MS } from '../SushiStack';
 import { MAX_BODIES } from '../sushiStack/physics';
 
 const mockSetActive = jest.fn();
@@ -34,6 +34,11 @@ const renderStack = (pieceCount: number) => {
 };
 
 const pieces = () => screen.UNSAFE_queryAllByType(Image).length;
+// Lascia terminare l'effetto di scomparsa dei pezzi annullati
+const finishVanish = () =>
+  act(() => {
+    jest.advanceTimersByTime(VANISH_MS + 10);
+  });
 
 describe('SushiStack', () => {
   beforeEach(() => {
@@ -66,7 +71,7 @@ describe('SushiStack', () => {
     expect(pieces()).toBe(5);
   });
 
-  it("toglie l'ultimo pezzo quando il punteggio scende", () => {
+  it("fa svanire l'ultimo pezzo quando il punteggio scende e poi lo toglie", () => {
     const { rerender } = renderStack(3);
     act(() => {
       jest.runOnlyPendingTimers();
@@ -75,8 +80,13 @@ describe('SushiStack', () => {
     expect(pieces()).toBe(3);
 
     rerender(<SushiStack pieceCount={2} />);
+    // Durante l'effetto il pezzo è ancora visibile
+    expect(pieces()).toBe(3);
+    finishVanish();
     expect(pieces()).toBe(2);
+
     rerender(<SushiStack pieceCount={0} />);
+    finishVanish();
     expect(pieces()).toBe(0);
   });
 
@@ -91,6 +101,7 @@ describe('SushiStack', () => {
     expect(pieces()).toBe(MAX_BODIES);
     // Annullando si tolgono i pezzi più recenti, senza ricreare quelli già scartati
     rerender(<SushiStack pieceCount={100} />);
+    finishVanish();
     expect(pieces()).toBe(MAX_BODIES - 51);
   });
 
