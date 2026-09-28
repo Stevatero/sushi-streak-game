@@ -1,0 +1,88 @@
+name: APK Android
+
+# Compila un APK installabile direttamente, senza EAS, sui runner GitHub (che includono Android SDK
+# e NDK) e lo pubblica come asset di una pre-release "apk-<variante>-<commit>", scaricabile da chiunque
+# abbia accesso al repository. Serve per i test interni: l'APK è firmato con la chiave di debug del
+# template Expo, quindi non può aggiornare una versione installata dal Play Store (la variante
+# "preview" ha un application ID diverso e si installa accanto).
+#
+# Avvio: Actions → "APK Android" → Run workflow.
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Variante da compilare'
+        type: choice
+        options: [preview, production]
+        default: preview
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-apk-${{ github.ref }}-${{ inputs.variant }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    name: Build APK (${{ inputs.variant }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      APP_VARIANT: ${{ inputs.variant }}
+    defaults:
+      run:
+        working-directory: sushi-game-app
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sushi-game-app/package-lock.json
+      - run: npm ci
+      - name: Esclude gli strumenti di sviluppo dalla build
+        run: node scripts/configure-build-variant.js
+      - name: Genera il progetto Android
+        run: npx expo prebuild --platform android --no-install
+      - name: Compila l'APK di rilascio
+        working-directory: sushi-game-app/android
+        run: |
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          ./gradlew assembleRelease --no-daemon \
+            -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+            -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
+      - name: Prepara il file
+        id: apk
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          NAME="sushi-streak-${VERSION}-${APP_VARIANT}-${SHORT_SHA}.apk"
+          cp android/app/build/outputs/apk/release/app-release.apk "$NAME"
+          ls -lh "$NAME"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "tag=apk-${APP_VARIANT}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.apk.outputs.name }}
+          path: sushi-game-app/${{ steps.apk.outputs.name }}
+          retention-days: 30
+      - name: Pubblica la pre-release con l'APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.apk.outputs.tag }}
+          NAME: ${{ steps.apk.outputs.name }}
+          VERSION: ${{ steps.apk.outputs.version }}
+        run: |
+          gh release delete "$TAG" --cleanup-tag --yes >/dev/null 2>&1 || true
+          {
+            echo "APK di test **${APP_VARIANT}** della versione ${VERSION}, compilato dal commit ${GITHUB_SHA}."
+            echo
+            echo "- Firmato con la chiave di debug: non aggiorna versioni installate da EAS o dal Play Store."
+            echo "- La variante preview si installa accanto alla versione pubblicata."
+            echo "- Architetture: arm64-v8a, armeabi-v7a."
+          } > notes.md
+          gh release create "$TAG" "$NAME" --target "$GITHUB_SHA" --prerelease \
+            --title "APK ${APP_VARIANT} ${VERSION} (${GITHUB_SHA::7})" --notes-file notes.md

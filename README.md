@@ -223,11 +223,12 @@ Procedura completa e checklist Play Store: **[docs/RELEASING.md](docs/RELEASING.
 
 ## CI/CD
 
-| Workflow                                 | Quando                       | Cosa fa                                                                                                                                                                                         |
-| ---------------------------------------- | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [CI](.github/workflows/ci.yml)           | Push su `main`, pull request | Backend (Node 20 e 22): lint, formattazione, test, audit. App: lint, typecheck, formattazione, test con coverage, expo-doctor, build del bundle Android, audit. Scansione secrets con gitleaks. |
-| [Release](.github/workflows/release.yml) | Tag `vX.Y.Z`                 | Verifica versione e CHANGELOG, crea la GitHub Release e, con `EXPO_TOKEN` configurato, avvia la build AAB su EAS (submit opzionale).                                                            |
-| [Dependabot](.github/dependabot.yml)     | Settimanale                  | Aggiornamenti raggruppati di dipendenze e GitHub Actions (Expo/React Native esclusi: si aggiornano con l'SDK).                                                                                  |
+| Workflow                                         | Quando                       | Cosa fa                                                                                                                                                                                         |
+| ------------------------------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [CI](.github/workflows/ci.yml)                   | Push su `main`, pull request | Backend (Node 20 e 22): lint, formattazione, test, audit. App: lint, typecheck, formattazione, test con coverage, expo-doctor, build del bundle Android, audit. Scansione secrets con gitleaks. |
+| [Release](.github/workflows/release.yml)         | Tag `vX.Y.Z`                 | Verifica versione e CHANGELOG, crea la GitHub Release e, con `EXPO_TOKEN` configurato, avvia la build AAB su EAS (submit opzionale).                                                            |
+| [APK Android](.github/workflows/android-apk.yml) | Manuale (Run workflow)       | Compila un APK di test (`preview` o `production`) senza EAS e lo pubblica come asset di una pre-release `apk-<variante>-<commit>`.                                                              |
+| [Dependabot](.github/dependabot.yml)             | Settimanale                  | Aggiornamenti raggruppati di dipendenze e GitHub Actions (Expo/React Native esclusi: si aggiornano con l'SDK).                                                                                  |
 
 ## Sicurezza e privacy
 
