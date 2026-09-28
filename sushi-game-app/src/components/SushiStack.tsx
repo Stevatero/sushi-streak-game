@@ -1,215 +1,233 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { View, Animated, StyleSheet, LayoutChangeEvent } from 'react-native';
-import Matter from 'matter-js';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { LayoutChangeEvent, Platform, StyleSheet, View } from 'react-native';
+import Animated, {
+  FrameInfo,
+  SharedValue,
+  useAnimatedStyle,
+  useFrameCallback,
+  useSharedValue,
+} from 'react-native-reanimated';
+import { scheduleOnRN, scheduleOnUI } from 'react-native-worklets';
 import {
-  NigiriIcon,
-  MakiIcon,
-  GunkanIcon,
-  SashimiIcon,
-  TemakiIcon,
-  UramakiIcon,
-  Nigiri2Icon,
-  Uramaki2Icon,
-} from './SushiIcons';
+  advanceWorld,
+  B_ANGLE,
+  B_X,
+  B_Y,
+  bodyOffset,
+  createWorld,
+  isIdle,
+  MAX_BODIES,
+  removeBody,
+  setWorldBounds,
+  spawnBody,
+  SpawnParams,
+  wakeWorld,
+  worldSeq,
+} from './sushiStack/physics';
+import { createPieceShape, createSpawnParams, PieceShape, SUSHI_KINDS } from './sushiStack/pieces';
 
-const SUSHI_ICON_COMPONENTS = [
-  NigiriIcon,
-  MakiIcon,
-  GunkanIcon,
-  SashimiIcon,
-  TemakiIcon,
-  UramakiIcon,
-  Nigiri2Icon,
-  Uramaki2Icon,
-];
+/**
+ * Pila di sushi con fisica: ogni pezzo del punteggio cade dall'alto e si accumula sul fondo.
+ *
+ * La simulazione gira sul thread UI (frame callback di Reanimated) e i pezzi leggono la propria
+ * posizione direttamente dallo stato fisico condiviso: nessun passaggio dal thread JS né render React
+ * per frame. Quando la pila è ferma il frame callback si spegne, quindi a riposo non consuma nulla.
+ */
 
-// Oltre questo numero i pezzi più vecchi vengono rimossi per mantenere fluida la simulazione
-const MAX_VISIBLE_PIECES = 60;
-const WALL_THICKNESS = 40;
-
-// 50% di probabilità per i nigiri (indici 0 e 6), il resto distribuito sulle altre icone
-const getRandomIconIndex = (): number => {
-  if (Math.random() < 0.5) {
-    return Math.random() < 0.5 ? 0 : 6;
-  }
-  const otherIndices = [1, 2, 3, 4, 5, 7];
-  return otherIndices[Math.floor(Math.random() * otherIndices.length)];
-};
+// Intervallo tra un pezzo e l'altro quando ne vanno aggiunti molti insieme (es. rientro in partita)
+const STAGGER_MS = 70;
+const IS_WEB = Platform.OS === 'web';
 
 interface SushiStackProps {
   pieceCount: number;
 }
 
-interface SushiPiece {
+interface Sprite extends PieceShape {
   id: number;
-  body: Matter.Body;
-  iconIndex: number;
-  size: number;
-  x: Animated.Value;
-  y: Animated.Value;
-  angle: Animated.Value;
+  slot: number;
 }
 
-const SushiStack: React.FC<SushiStackProps> = ({ pieceCount }) => {
-  const [pieces, setPieces] = useState<SushiPiece[]>([]);
-  const [layout, setLayout] = useState<{ width: number; height: number } | null>(null);
-  const engineRef = useRef<Matter.Engine | null>(null);
-  const piecesRef = useRef<SushiPiece[]>([]);
-  const frameRef = useRef<number | null>(null);
-  const lastTimeRef = useRef<number | null>(null);
-  const nextIdRef = useRef(0);
-  // Numero di pezzi "logici" (punteggio) già rappresentati, anche se alcuni sono stati rimossi per il limite
-  const representedRef = useRef(0);
+interface Spawn {
+  slot: number;
+  params: SpawnParams;
+}
 
-  const onLayout = (e: LayoutChangeEvent) => {
-    const { width, height } = e.nativeEvent.layout;
-    if (!layout || layout.width !== width || layout.height !== height) setLayout({ width, height });
-  };
+function syncWorld(world: SharedValue<number[]>, removals: number[], spawns: Spawn[], seq: number) {
+  'worklet';
+  const w = world.value;
+  for (let i = 0; i < removals.length; i++) removeBody(w, removals[i]);
+  for (let i = 0; i < spawns.length; i++) spawnBody(w, spawns[i].slot, spawns[i].params);
+  wakeWorld(w, seq);
+  world.modify();
+}
 
-  // Ciclo di simulazione: aggiorna direttamente gli Animated.Value e si ferma quando tutto è fermo
-  const step = useCallback((time: number) => {
-    const engine = engineRef.current;
-    if (!engine) return;
-    const delta = lastTimeRef.current == null ? 16.6 : Math.min(time - lastTimeRef.current, 33);
-    lastTimeRef.current = time;
-    Matter.Engine.update(engine, delta);
+function resizeWorld(world: SharedValue<number[]>, width: number, height: number, seq: number) {
+  'worklet';
+  const w = world.value;
+  setWorldBounds(w, width, height);
+  wakeWorld(w, seq);
+  world.modify();
+}
 
-    let allSleeping = true;
-    for (const piece of piecesRef.current) {
-      const { position, angle, isSleeping } = piece.body;
-      piece.x.setValue(position.x - piece.size / 2);
-      piece.y.setValue(position.y - piece.size / 2);
-      piece.angle.setValue(angle);
-      if (!isSleeping) allSleeping = false;
-    }
+const HIDDEN_TRANSFORM = [{ translateX: 0 }, { translateY: -10000 }, { rotate: '0rad' }, { translateY: 0 }];
 
-    if (allSleeping) {
-      frameRef.current = null;
-      lastTimeRef.current = null;
-      return;
-    }
-    frameRef.current = requestAnimationFrame(step);
-  }, []);
-
-  const wake = useCallback(() => {
-    if (frameRef.current == null) frameRef.current = requestAnimationFrame(step);
-  }, [step]);
-
-  // Creazione del mondo fisico in base alle dimensioni reali del contenitore
-  useEffect(() => {
-    if (!layout) return;
-    const engine = Matter.Engine.create({ enableSleeping: true });
-    engine.gravity.y = 1.2;
-    const { width, height } = layout;
-    const half = WALL_THICKNESS / 2;
-    Matter.Composite.add(engine.world, [
-      Matter.Bodies.rectangle(width / 2, height + half, width * 2, WALL_THICKNESS, { isStatic: true }),
-      Matter.Bodies.rectangle(-half, height / 2, WALL_THICKNESS, height * 3, { isStatic: true }),
-      Matter.Bodies.rectangle(width + half, height / 2, WALL_THICKNESS, height * 3, { isStatic: true }),
-    ]);
-    // I pezzi esistenti (es. dopo una rotazione dello schermo) vengono reinseriti nel nuovo mondo
-    piecesRef.current.forEach((p) => {
-      Matter.Body.setPosition(p.body, { x: Math.min(Math.max(p.body.position.x, p.size), width - p.size), y: -p.size });
-      Matter.Composite.add(engine.world, p.body);
-    });
-    engineRef.current = engine;
-    wake();
-
-    return () => {
-      if (frameRef.current != null) cancelAnimationFrame(frameRef.current);
-      frameRef.current = null;
-      lastTimeRef.current = null;
-      Matter.Composite.clear(engine.world, false);
-      Matter.Engine.clear(engine);
-      engineRef.current = null;
+const SushiSprite = memo(function SushiSprite({ sprite, world }: { sprite: Sprite; world: SharedValue<number[]> }) {
+  const { slot, width, height, offsetY, kind } = sprite;
+  const animatedStyle = useAnimatedStyle(() => {
+    // Sul thread JS (primo render) non si legge lo stato fisico: richiederebbe una copia sincrona
+    if (!globalThis._WORKLET && !IS_WEB) return { transform: HIDDEN_TRANSFORM };
+    const w = world.value;
+    const o = bodyOffset(slot);
+    return {
+      transform: [
+        { translateX: w[o + B_X] - width / 2 },
+        { translateY: w[o + B_Y] - height / 2 },
+        { rotate: `${w[o + B_ANGLE]}rad` },
+        { translateY: offsetY },
+      ],
     };
-  }, [layout, wake]);
-
-  // Sincronizza i pezzi con il punteggio: aggiunge quelli nuovi e rimuove in caso di annullamento
-  useEffect(() => {
-    const engine = engineRef.current;
-    if (!engine || !layout) return;
-
-    let list = piecesRef.current;
-    let changed = false;
-
-    while (representedRef.current < pieceCount) {
-      const size = 35 + Math.random() * 25;
-      const x = Math.random() * (layout.width - size * 2) + size;
-      const y = -size - Math.random() * 60;
-      const body = Matter.Bodies.circle(x, y, (size * 0.95) / 2, {
-        restitution: 0.3,
-        friction: 0.7,
-        density: 0.003,
-        frictionAir: 0.015,
-        angle: Math.random() * Math.PI * 2,
-      });
-      Matter.Composite.add(engine.world, body);
-      list = [
-        ...list,
-        {
-          id: nextIdRef.current++,
-          body,
-          iconIndex: getRandomIconIndex(),
-          size,
-          x: new Animated.Value(x - size / 2),
-          y: new Animated.Value(y - size / 2),
-          angle: new Animated.Value(body.angle),
-        },
-      ];
-      representedRef.current += 1;
-      changed = true;
-    }
-
-    while (representedRef.current > pieceCount) {
-      const removed = list[list.length - 1];
-      if (removed) {
-        Matter.Composite.remove(engine.world, removed.body);
-        list = list.slice(0, -1);
-      }
-      representedRef.current -= 1;
-      changed = true;
-    }
-
-    while (list.length > MAX_VISIBLE_PIECES) {
-      Matter.Composite.remove(engine.world, list[0].body);
-      list = list.slice(1);
-      changed = true;
-    }
-
-    if (changed) {
-      piecesRef.current = list;
-      setPieces(list);
-      // Sveglia i corpi fermi così la pila si riassesta
-      list.forEach((p) => Matter.Sleeping.set(p.body, false));
-      wake();
-    }
-  }, [pieceCount, layout, wake]);
+  });
 
   return (
-    <View style={styles.container} pointerEvents="none" onLayout={onLayout}>
-      {pieces.map((piece) => {
-        const IconComponent = SUSHI_ICON_COMPONENTS[piece.iconIndex];
-        const rotate = piece.angle.interpolate({
-          inputRange: [-Math.PI * 100, Math.PI * 100],
-          outputRange: ['-18000deg', '18000deg'],
-        });
-        return (
-          <Animated.View
-            key={piece.id}
-            style={[
-              styles.sushiPiece,
-              {
-                width: piece.size,
-                height: piece.size,
-                transform: [{ translateX: piece.x }, { translateY: piece.y }, { rotate }],
-              },
-            ]}
-          >
-            <IconComponent width={piece.size} height={piece.size} />
-          </Animated.View>
-        );
-      })}
+    <Animated.Image
+      source={SUSHI_KINDS[kind].source}
+      resizeMode="contain"
+      fadeDuration={0}
+      style={[styles.sprite, { width, height }, animatedStyle]}
+    />
+  );
+});
+
+const SushiStack: React.FC<SushiStackProps> = ({ pieceCount }) => {
+  const [initialWorld] = useState(createWorld);
+  const world = useSharedValue(initialWorld);
+  const [sprites, setSprites] = useState<Sprite[]>([]);
+  const [layout, setLayout] = useState<{ width: number; height: number } | null>(null);
+
+  const spritesRef = useRef<Sprite[]>([]);
+  const layoutRef = useRef(layout);
+  const targetRef = useRef(pieceCount);
+  // Pezzi "logici" (punteggio) già rappresentati, anche se i più vecchi sono stati tolti per il limite
+  const representedRef = useRef(0);
+  const freeSlotsRef = useRef(Array.from({ length: MAX_BODIES }, (_, i) => MAX_BODIES - 1 - i));
+  const nextIdRef = useRef(0);
+  const seqRef = useRef(0);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const frameCallbackRef = useRef<{ setActive: (active: boolean) => void } | null>(null);
+
+  // Il thread UI segnala che la pila è ferma: si spegne il frame callback, a meno che nel frattempo
+  // il thread JS non l'abbia già risvegliata (sequenza più recente)
+  const onSettled = useCallback((seq: number) => {
+    if (seq === seqRef.current) frameCallbackRef.current?.setActive(false);
+  }, []);
+
+  const step = useCallback(
+    (frame: FrameInfo) => {
+      'worklet';
+      const w = world.value;
+      if (isIdle(w)) return;
+      const dt = frame.timeSincePreviousFrame == null ? 1 / 60 : frame.timeSincePreviousFrame / 1000;
+      const settled = advanceWorld(w, dt);
+      world.modify();
+      if (settled) scheduleOnRN(onSettled, worldSeq(w));
+    },
+    [world, onSettled]
+  );
+
+  const frameCallback = useFrameCallback(step, false);
+  useEffect(() => {
+    frameCallbackRef.current = frameCallback;
+  }, [frameCallback]);
+
+  const wake = useCallback(() => {
+    seqRef.current += 1;
+    return seqRef.current;
+  }, []);
+
+  // Porta i pezzi visibili al punteggio: annullamenti subito, aggiunte una alla volta
+  const pump = useCallback(() => {
+    timerRef.current = null;
+    const size = layoutRef.current;
+    if (!size) return;
+
+    const target = targetRef.current;
+    const freeSlots = freeSlotsRef.current;
+    let represented = representedRef.current;
+    let list = spritesRef.current;
+    const removals: number[] = [];
+    const spawns: Spawn[] = [];
+
+    while (represented > target) {
+      const last = list[list.length - 1];
+      if (last) {
+        removals.push(last.slot);
+        freeSlots.push(last.slot);
+        list = list.slice(0, -1);
+      }
+      represented -= 1;
+    }
+
+    // In un salto molto grande (es. rientro in una partita avanzata) i pezzi che verrebbero subito
+    // scartati per il limite non vengono nemmeno creati
+    if (target - represented > MAX_BODIES) represented = target - MAX_BODIES;
+
+    if (represented < target) {
+      if (list.length >= MAX_BODIES) {
+        const oldest = list[0];
+        removals.push(oldest.slot);
+        freeSlots.push(oldest.slot);
+        list = list.slice(1);
+      }
+      const slot = freeSlots.pop();
+      if (slot !== undefined) {
+        const shape = createPieceShape();
+        spawns.push({ slot, params: createSpawnParams(shape, size.width) });
+        list = [...list, { ...shape, id: nextIdRef.current++, slot }];
+      }
+      represented += 1;
+    }
+
+    representedRef.current = represented;
+    if (removals.length > 0 || spawns.length > 0) {
+      scheduleOnUI(syncWorld, world, removals, spawns, wake());
+      frameCallbackRef.current?.setActive(true);
+      spritesRef.current = list;
+      setSprites(list);
+    }
+    if (represented < target) timerRef.current = setTimeout(pump, STAGGER_MS);
+  }, [world, wake]);
+
+  useEffect(() => {
+    if (!layout) return;
+    layoutRef.current = layout;
+    scheduleOnUI(resizeWorld, world, layout.width, layout.height, wake());
+    frameCallbackRef.current?.setActive(true);
+  }, [layout, world, wake]);
+
+  useEffect(() => {
+    targetRef.current = pieceCount;
+    if (!layout) return;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    pump();
+  }, [pieceCount, layout, pump]);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    []
+  );
+
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setLayout((prev) => (prev && prev.width === width && prev.height === height ? prev : { width, height }));
+  }, []);
+
+  return (
+    <View style={styles.container} pointerEvents="none" onLayout={onLayout} testID="sushi-stack">
+      {sprites.map((sprite) => (
+        <SushiSprite key={sprite.id} sprite={sprite} world={world} />
+      ))}
     </View>
   );
 };
@@ -217,13 +235,13 @@ const SushiStack: React.FC<SushiStackProps> = ({ pieceCount }) => {
 const styles = StyleSheet.create({
   container: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 0,
+    overflow: 'hidden',
   },
-  sushiPiece: {
+  sprite: {
     position: 'absolute',
     left: 0,
     top: 0,
   },
 });
 
-export default SushiStack;
+export default memo(SushiStack);
