@@ -55,6 +55,10 @@ Il backend è unico (`https://sushi.dietalab.net`). Per usarne un altro in una b
 
 `expo-dev-client` (con dev launcher e dev menu) porta con sé dipendenze native come Google ML Kit e il tooling di Jetpack Compose. Per le varianti `preview` e `production` lo script [`scripts/configure-build-variant.js`](../sushi-game-app/scripts/configure-build-variant.js) li esclude dall'autolinking. EAS lo esegue automaticamente tramite l'hook `eas-build-pre-install`.
 
+### APK di test da GitHub Actions (senza EAS)
+
+Il workflow **APK Android** (Actions → _APK Android_ → _Run workflow_) compila un APK sui runner GitHub, che includono Android SDK e NDK, e lo allega a una pre-release `apk-<variante>-<commit>`. È firmato con la chiave di debug del template Expo: va bene per provare l'app, ma non aggiorna versioni installate da EAS o dal Play Store (la variante `preview` si installa accanto a quella pubblicata).
+
 ### Build locale di rilascio (senza EAS)
 
 Serve Android Studio (JDK 17+ e Android SDK 36). Su Windows conviene un percorso breve (es. `C:\src\sushi-streak-game`) per non superare il limite di 260 caratteri nella compilazione nativa.
