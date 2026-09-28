@@ -42,6 +42,7 @@
 
 - Crea una sessione con un codice (generato o personalizzato) e invita gli amici con codice o link (`https://sushi.dietalab.net/join/CODICE`).
 - Classifica condivisa aggiornata in tempo reale via WebSocket, con la tua posizione evidenziata.
+- Chi crea la partita può rimuovere un giocatore (es. chi è entrato indovinando il codice).
 - "Aggiungi pezzo" con animazione, suono e pila di sushi con fisica simulata sul thread UI (fluida anche con decine di pezzi); "Annulla ultimo" per correggere un tocco accidentale.
 - "Ho finito!" (con conferma): la partita termina quando tutti hanno finito, con podio, classifica finale (pareggi inclusi) e una pioggia di petali di ciliegio per chi vince.
 
@@ -183,6 +184,7 @@ L'app usa il dev client di Expo: installa sul dispositivo una build `development
 | `LOG_LEVEL`              | `info`                                | `debug` / `info` / `warn` / `error` / `silent`                   |
 | `PRIVACY_CONTACT`        | issue GitHub                          | Contatto mostrato in `/privacy`                                  |
 | `ANDROID_CERT_SHA256`    | —                                     | Impronte del certificato Play per gli App Links                  |
+| `APP_STORE_URL`          | scheda Google Play del pacchetto      | Download dell'app dalla pagina di invito se non è installata     |
 
 Nessun secret è necessario per sviluppare: le credenziali di firma e pubblicazione sono gestite da EAS e GitHub Secrets.
 

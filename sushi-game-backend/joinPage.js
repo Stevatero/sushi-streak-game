@@ -59,7 +59,29 @@ const baseStyles = `
   }
 `;
 
-function renderJoinPage(info, nonce = '') {
+const PACKAGE_RE = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/;
+
+// Link per aprire l'app: su Android un intent, che se l'app non è installata porta alla pagina di
+// download invece di mostrare un errore; altrove lo schema personalizzato
+function appLinks(sessionId, { androidPackage, storeUrl } = {}) {
+  const path = `join/${encodeURIComponent(sessionId)}`;
+  const store = typeof storeUrl === 'string' && /^https?:\/\//.test(storeUrl) ? storeUrl : null;
+  const pkg = typeof androidPackage === 'string' && PACKAGE_RE.test(androidPackage) ? androidPackage : null;
+  const extras = [pkg ? `package=${pkg}` : '', store ? `S.browser_fallback_url=${encodeURIComponent(store)}` : '']
+    .filter(Boolean)
+    .map((part) => `${part};`)
+    .join('');
+  return {
+    deepLink: `sushi-streak://${path}`,
+    // Pulsante: con pacchetto e fallback verso lo store
+    androidIntent: `intent://${path}#Intent;scheme=sushi-streak;${extras}end`,
+    // Apertura automatica: senza pacchetto né fallback, se l'app manca non succede nulla
+    androidAutoIntent: `intent://${path}#Intent;scheme=sushi-streak;end`,
+    storeUrl: store,
+  };
+}
+
+function renderJoinPage(info, nonce = '', options = {}) {
   const players = [...info.players].sort((a, b) => b.score - a.score);
   const playersHtml = players.length
     ? `<div class="players-list">
@@ -75,7 +97,7 @@ function renderJoinPage(info, nonce = '') {
       </div>`
     : '';
 
-  const deepLink = `sushi-streak://join/${encodeURIComponent(info.sessionId)}`;
+  const links = appLinks(info.sessionId, options);
 
   return `<!DOCTYPE html>
 <html lang="it">
@@ -99,6 +121,8 @@ function renderJoinPage(info, nonce = '') {
       display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; margin: 6px 0;
       background: var(--kinari); border-radius: 12px; border: 1px solid var(--line); word-break: break-word;
     }
+    .store { margin-top: 14px; font-size: 0.9rem; }
+    .store a { color: var(--shu); font-weight: 600; }
     @media (max-width: 600px) { .session-details { flex-direction: column; gap: 15px; } }
   </style>
 </head>
@@ -127,16 +151,25 @@ function renderJoinPage(info, nonce = '') {
     </div>
 
     <div>
-      ${info.isActive ? `<a href="${escapeHtml(deepLink)}" class="btn">📱 Apri nell'app</a>` : ''}
+      ${info.isActive ? `<a id="open-btn" href="${escapeHtml(links.deepLink)}" class="btn">📱 Apri nell'app</a>` : ''}
       <button id="copy-btn" class="btn btn-secondary" type="button">📋 Copia codice</button>
     </div>
+    ${
+      links.storeUrl
+        ? `<p class="store">Non hai ancora l'app? <a href="${escapeHtml(links.storeUrl)}" rel="noopener">Scaricala qui</a></p>`
+        : ''
+    }
   </div>
 
   <script nonce="${escapeHtml(nonce)}">
     (function () {
       var sessionId = ${jsonForScript(info.sessionId)};
-      var deepLink = ${jsonForScript(deepLink)};
+      var androidIntent = ${jsonForScript(links.androidIntent)};
+      var androidAutoIntent = ${jsonForScript(links.androidAutoIntent)};
       var isActive = ${info.isActive ? 'true' : 'false'};
+      var isAndroid = /Android/i.test(navigator.userAgent);
+      var openBtn = document.getElementById('open-btn');
+      if (openBtn && isAndroid) openBtn.setAttribute('href', androidIntent);
 
       function fallbackCopy() {
         var textArea = document.createElement('textarea');
@@ -158,9 +191,9 @@ function renderJoinPage(info, nonce = '') {
         }
       });
 
-      // Prova ad aprire l'app automaticamente su mobile
-      if (isActive && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) {
-        setTimeout(function () { window.location.href = deepLink; }, 1000);
+      // Su Android prova ad aprire l'app; se non è installata la pagina resta com'è
+      if (isActive && isAndroid) {
+        setTimeout(function () { window.location.href = androidAutoIntent; }, 800);
       }
     })();
   </script>
@@ -187,4 +220,4 @@ function renderNotFoundPage(nonce = '') {
 </html>`;
 }
 
-module.exports = { escapeHtml, jsonForScript, renderJoinPage, renderNotFoundPage };
+module.exports = { appLinks, escapeHtml, jsonForScript, renderJoinPage, renderNotFoundPage };

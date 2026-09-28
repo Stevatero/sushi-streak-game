@@ -49,6 +49,7 @@ jest.mock('../../services/socketService', () => {
       addPiece: jest.fn(() => Promise.resolve({ ok: true, score: 1 })),
       removePiece: jest.fn(() => Promise.resolve({ ok: true, score: 0 })),
       finishGame: jest.fn(() => Promise.resolve({ ok: true })),
+      kickPlayer: jest.fn(() => Promise.resolve({ ok: true })),
     },
   };
 });
@@ -160,5 +161,41 @@ describe('GameSessionScreen', () => {
       const [saved] = await SessionStorageService.getSavedSessions();
       expect(saved.winner).toEqual({ name: 'Anna e Luca', score: 5 });
     });
+  });
+
+  it("l'host può rimuovere un altro giocatore dopo una conferma", async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    renderWithProviders(<GameSessionScreen />);
+    serverEmit('session', { ...snapshot(), hostId: 'p1' });
+
+    expect(screen.getByText(/tocca un giocatore per rimuoverlo/)).toBeTruthy();
+    fireEvent.press(screen.getByText('Luca'));
+    const [title, , buttons] = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
+    expect(title).toBe('Rimuovere Luca?');
+    await act(async () => {
+      await buttons!.find((b) => b.text === 'Rimuovi')!.onPress!();
+    });
+    expect(socketService.kickPlayer).toHaveBeenCalledWith('p2');
+  });
+
+  it('chi non è host non può rimuovere nessuno', () => {
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    renderWithProviders(<GameSessionScreen />);
+    serverEmit('session', { ...snapshot(), hostId: 'p2' });
+
+    expect(screen.queryByText(/tocca un giocatore per rimuoverlo/)).toBeNull();
+    fireEvent.press(screen.getByText('Luca'));
+    expect(alertSpy).not.toHaveBeenCalled();
+  });
+
+  it('se si viene rimossi avvisa e non salva la partita nello storico', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert');
+    renderWithProviders(<GameSessionScreen />);
+    serverEmit('session', { ...snapshot(), hostId: 'p2' });
+    serverEmit('kicked', { sessionId: 'CENA' });
+
+    expect(alertSpy).toHaveBeenCalledWith('Sei stato rimosso dalla partita', expect.any(String), expect.any(Array));
+    await waitFor(async () => expect(await SessionStorageService.getActiveSession()).toBeNull());
+    expect(await SessionStorageService.getSavedSessions()).toHaveLength(0);
   });
 });
