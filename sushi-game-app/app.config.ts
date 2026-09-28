@@ -10,7 +10,8 @@ import { version } from './package.json';
  * - production:  build per il Google Play Store (default se la variabile non è impostata)
  *
  * La versione dell'app (versionName) viene letta da package.json, unica fonte di verità.
- * Il versionCode Android è gestito da EAS (appVersionSource "remote" + autoIncrement).
+ * Il versionCode Android è gestito da EAS (appVersionSource "remote" + autoIncrement). Le build
+ * fuori da EAS (workflow "APK Android") lo passano in ANDROID_VERSION_CODE, ricavato dalla versione.
  */
 type AppVariant = 'development' | 'preview' | 'production';
 
@@ -30,6 +31,7 @@ const variantConfig = {
 }[APP_VARIANT];
 
 const applicationId = `${BASE_ID}${variantConfig.idSuffix}`;
+const versionCode = Number(process.env.ANDROID_VERSION_CODE) || undefined;
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -51,6 +53,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   android: {
     package: applicationId,
+    ...(versionCode ? { versionCode } : {}),
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: BRAND_COLOR,

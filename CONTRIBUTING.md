@@ -29,6 +29,7 @@ npm run lint && npm run format:check && npm test
 - **Formattazione**: Prettier (configurazione in `.prettierrc.json`); nessuna discussione sullo stile nelle review.
 - **Lingua**: interfaccia utente, commenti e documentazione in italiano.
 - **Changelog**: aggiungi una voce nella sezione `Unreleased` di `CHANGELOG.md` per ogni modifica visibile all'utente.
+- **Versione**: ogni modifica che viene compilata e distribuita (APK di test, build EAS, rilascio) aggiorna la versione SemVer in `sushi-game-app/package.json` (e in `sushi-game-backend/package.json` se cambia il server) e porta le voci di `Unreleased` nella nuova sezione del changelog. Vedi [docs/RELEASING.md](docs/RELEASING.md).
 - **Privacy**: se una modifica cambia i dati trattati, aggiorna `sushi-game-backend/privacyPage.js` e `docs/DATA_SAFETY.md`.
 
 ## Sicurezza

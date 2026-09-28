@@ -5,56 +5,83 @@
 <h1 align="center">Sushi Streak</h1>
 
 <p align="center">
-  Sfida i tuoi amici e scopri chi è il vero campione di sushi.<br>
-  Un'app Android per contare in tempo reale i pezzi mangiati durante una cena all-you-can-eat.
+  <strong>Chi mangia più sushi? Sfida i tuoi amici all'ultimo nigiri.</strong><br>
+  L'app Android per contare in tempo reale i pezzi mangiati durante una cena all-you-can-eat,<br>
+  con classifica condivisa, una pila di sushi che cresce a ogni pezzo e un tocco di stile giapponese.
 </p>
 
 <p align="center">
   <a href="https://github.com/Stevatero/sushi-streak-game/actions/workflows/ci.yml"><img src="https://github.com/Stevatero/sushi-streak-game/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://github.com/Stevatero/sushi-streak-game/releases"><img src="https://img.shields.io/github/v/release/Stevatero/sushi-streak-game?include_prereleases&label=release" alt="Release"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versione-1.3.0-C94330" alt="Versione 1.3.0"></a>
   <img src="https://img.shields.io/badge/Expo_SDK-54-000020?logo=expo" alt="Expo SDK 54">
   <img src="https://img.shields.io/badge/Android-API_24%E2%80%9336-3DDC84?logo=android&logoColor=white" alt="Android API 24-36">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/app-chiaro.png" alt="Home, partita, podio finale e storico in tema chiaro" width="100%">
 </p>
 
 ---
 
 ## Indice
 
+- [Scarica l'app](#scarica-lapp)
 - [Funzionalità](#funzionalità)
 - [Come si gioca](#come-si-gioca)
+- [Design](#design)
 - [Stack tecnologico](#stack-tecnologico)
 - [Architettura](#architettura)
 - [Struttura del progetto](#struttura-del-progetto)
-- [Requisiti](#requisiti)
 - [Sviluppo locale](#sviluppo-locale)
 - [Configurazione](#configurazione)
 - [Qualità: test, lint e formattazione](#qualità-test-lint-e-formattazione)
-- [Build e release Android](#build-e-release-android)
+- [Versioni, build e rilasci](#versioni-build-e-rilasci)
 - [CI/CD](#cicd)
 - [Sicurezza e privacy](#sicurezza-e-privacy)
 - [Roadmap](#roadmap)
 - [Licenza e crediti](#licenza-e-crediti)
 
+## Scarica l'app
+
+L'app non è ancora sul Google Play Store. Per provarla c'è l'**APK di test** (variante _preview_, si installa accanto a un'eventuale versione del Play Store come "Sushi Streak (Preview)"):
+
+| APK                                    | Per chi                              | Link fisso all'ultima build                                                                                                                                |
+| -------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Solo arm64 (consigliato, ~29 MB)       | Telefoni Android degli ultimi anni   | [sushi-streak-preview-arm64.apk](https://github.com/Stevatero/sushi-streak-game/releases/download/apk-preview-latest-arm64/sushi-streak-preview-arm64.apk) |
+| Completo (arm64 + armeabi-v7a, ~40 MB) | Anche telefoni meno recenti a 32 bit | [sushi-streak-preview.apk](https://github.com/Stevatero/sushi-streak-game/releases/download/apk-preview-latest/sushi-streak-preview.apk)                   |
+
+Le build per versione sono nelle [release](https://github.com/Stevatero/sushi-streak-game/releases) `apk-preview-vX.Y.Z`.
+
+**Come installarlo**
+
+1. Apri il link dal telefono con **Chrome** (non dal browser interno di altre app, che spesso non salva gli `.apk`).
+2. Chrome avvisa che il file può essere dannoso: tocca **Scarica comunque**. Senza questa conferma il download arriva al 100% ma il file non viene salvato.
+3. Apri il file dalla notifica di download o da **File → Download**.
+4. Se richiesto, consenti a Chrome (o all'app File) di **installare app sconosciute**; se Play Protect avvisa, scegli **Installa comunque**.
+
+> L'APK di test è firmato con una chiave di debug: va bene per provare l'app, ma non aggiorna una versione installata dal Play Store. Una nuova build della stessa variante si installa invece come aggiornamento della precedente.
+
 ## Funzionalità
 
 **Partite multigiocatore in tempo reale**
 
-- Crea una sessione con un codice (generato o personalizzato) e invita gli amici con codice o link (`https://sushi.dietalab.net/join/CODICE`).
-- Classifica condivisa aggiornata in tempo reale via WebSocket, con la tua posizione evidenziata.
-- Chi crea la partita può rimuovere un giocatore (es. chi è entrato indovinando il codice).
-- "Aggiungi pezzo" con animazione, suono e pila di sushi con fisica simulata sul thread UI (fluida anche con decine di pezzi); "Annulla ultimo" per correggere un tocco accidentale.
-- "Ho finito!" (con conferma): la partita termina quando tutti hanno finito, con podio, classifica finale (pareggi inclusi) e una pioggia di petali di ciliegio per chi vince.
+- Crea una partita con un codice (generato o personalizzato) e invita gli amici con codice o link (`https://sushi.dietalab.net/join/CODICE`); il pulsante **Incolla** riconosce anche un link di invito copiato.
+- Classifica condivisa aggiornata in tempo reale via WebSocket, con la tua posizione e il tuo punteggio in grande.
+- **+1** per ogni pezzo mangiato, con suono, animazione e una pila di sushi che cade e si accumula con una fisica simulata sul thread UI: fluida anche con decine di pezzi. **Annulla** corregge un tocco accidentale.
+- Chi crea la partita (👑) può rimuovere un giocatore toccandolo in classifica, per esempio chi è entrato indovinando il codice.
+- **Ho finito** (con conferma): la partita termina quando tutti hanno finito, con podio, classifica finale, pareggi gestiti e una pioggia di petali di ciliegio per chi vince.
+- Pagina web di invito con la stessa grafica dell'app, che apre l'app o porta allo store se non è installata.
 
 **Affidabilità**
 
 - Riconnessione automatica dopo cadute di rete o il ritorno dall'app in background, con indicatore dello stato di connessione.
 - Partita riprendibile dalla Home anche dopo la chiusura forzata dell'app o un riavvio del server.
-- Le sessioni restano attive fino a 3 ore senza attività (configurabile).
+- Le partite restano aperte fino a 3 ore senza attività (configurabile).
 
 **Storico e preferenze**
 
-- Salvataggio automatico delle partite sul dispositivo, con durata e nome del ristorante facoltativo.
+- Salvataggio automatico delle partite sul dispositivo, con durata, ristorante facoltativo e un riepilogo (partite, pezzi mangiati, record).
 - Tema sistema/chiaro/scuro e suoni attivabili, con preferenze salvate.
 - Cancellazione dei dati locali e informativa privacy dalle Impostazioni.
 
@@ -62,83 +89,108 @@ L'app non richiede registrazione e non contiene pubblicità, analytics o traccia
 
 ## Come si gioca
 
-1. Un giocatore crea la sessione e condivide il codice o il link.
-2. Gli altri si uniscono inserendo il codice e il proprio nome.
-3. Ognuno tocca **Aggiungi pezzo** per ogni pezzo mangiato: la classifica si aggiorna per tutti.
-4. Quando hai finito tocca **Ho finito!**; quando tutti hanno finito viene proclamato il vincitore.
+1. Un giocatore apre **Crea**, sceglie il proprio nome e tocca **Crea partita**, poi invita gli altri con il link o il codice.
+2. Gli altri aprono il link, oppure in **Partecipa** incollano o scrivono il codice.
+3. Ognuno tocca **+1** per ogni pezzo mangiato: la classifica si aggiorna per tutti e la pila di sushi cresce.
+4. Quando hai finito tocca **Ho finito**; quando tutti hanno finito compaiono il podio e il vincitore, e la partita finisce nello storico.
+
+## Design
+
+<p align="center">
+  <img src="docs/screenshots/app-scuro.png" alt="Home, partita, vittoria e impostazioni in tema scuro" width="100%">
+</p>
+
+Un'interfaccia fresca e moderna con un richiamo discreto al Giappone:
+
+- **Colori tradizionali**: carta _washi_ e seta grezza _kinari_ per le superfici chiare, inchiostro _sumi_ per il testo, vermiglione _shu_ (il colore dei timbri e dei torii) come colore principale, indaco _ai_ e _matcha_ come accenti. Il tema scuro _yoru_ (notte) riprende il prugna dell'icona e dello splash.
+- **Timbri _hanko_** per il logo, le posizioni in classifica (oro, argento, bronzo) e la vittoria; motivo a onde **_seigaiha_** sullo sfondo; petali di ciliegio (_sakura fubuki_) per festeggiare.
+- **Tipografia** con il font [Outfit](https://fonts.google.com/specimen/Outfit) e piccole didascalie in giapponese:
+
+| Parola       | Lettura     | Dove                    | Significato                              |
+| ------------ | ----------- | ----------------------- | ---------------------------------------- |
+| 寿司         | sushi       | logo                    | sushi                                    |
+| 貫           | kan         | punteggio, pulsante +1  | unità con cui si contano i pezzi         |
+| いただきます | itadakimasu | Crea partita            | "buon appetito", detto prima di mangiare |
+| ごちそうさま | gochisōsama | fine dei propri pezzi   | "grazie per il pasto", detto alla fine   |
+| 順位         | jun'i       | classifica              | posizione                                |
+| 勝           | shō / kachi | vincitore               | vittoria                                 |
+| 完           | kan         | giocatore che ha finito | completato                               |
+
+Il design system è in `sushi-game-app/src/theme/theme.ts` (palette, tipografia, temi Material 3) e `src/components/ui/` (pulsanti, pannelli, campi, pannelli dal basso, timbri, motivo a onde).
 
 ## Stack tecnologico
 
-| Componente       | Tecnologie                                                                             |
-| ---------------- | -------------------------------------------------------------------------------------- |
-| App              | Expo SDK 54, React Native 0.81 (New Architecture, Hermes), React 19, TypeScript strict |
-| UI e navigazione | React Native Paper (Material 3), React Navigation 7 (native stack), Reanimated 4       |
-| Stato e dati     | Zustand, AsyncStorage, Socket.IO client                                                |
-| Gioco            | Motore fisico worklet su Reanimated (pila di sushi), expo-audio                        |
-| Backend          | Node.js ≥ 20, Express 4, Socket.IO 4, SQLite (`sqlite3`), Helmet                       |
-| Qualità          | Jest + Testing Library, node:test, ESLint, Prettier, TypeScript                        |
-| Delivery         | EAS Build/Submit, GitHub Actions, Dependabot, PM2 + nginx                              |
+| Componente       | Tecnologie                                                                                     |
+| ---------------- | ---------------------------------------------------------------------------------------------- |
+| App              | Expo SDK 54, React Native 0.81 (New Architecture, Hermes), React 19, TypeScript strict         |
+| UI e navigazione | Design system proprio su React Native Paper (Material 3), React Navigation 7, Reanimated 4     |
+| Animazioni       | Motore fisico della pila di sushi scritto come worklet sul thread UI; festa con petali animati |
+| Stato e dati     | Zustand, AsyncStorage, Socket.IO client                                                        |
+| Backend          | Node.js ≥ 20, Express 4, Socket.IO 4, SQLite (`sqlite3`), Helmet                               |
+| Qualità          | Jest + Testing Library, node:test, ESLint, Prettier, TypeScript                                |
+| Delivery         | EAS Build/Submit, GitHub Actions (CI, release, APK di test), Dependabot, PM2 + nginx           |
 
 ## Architettura
 
 ```
 ┌──────────────────────────── App (Expo / React Native) ────────────────────────────┐
-│ Screens (Home, Partita, Storico, Impostazioni)                                    │
-│   │                                                                              │
+│ Screens (Home, Partita, Storico, Impostazioni) + design system (theme, ui/)       │
 │   ├── gameStore (Zustand) ◀── socketService ── riconnessione, rejoin, ack/timeout │
 │   ├── api (REST, timeout, errori tipizzati)                                       │
-│   └── sessionStorage / preferences (AsyncStorage, dati validati)                  │
+│   ├── sessionStorage / preferences (AsyncStorage, dati validati)                  │
+│   └── SushiStack ── fisica worklet sul thread UI (Reanimated frame callback)      │
 └───────────────┬───────────────────────────────────────────────┬───────────────────┘
-                │ HTTPS  POST /api/sessions, /join, GET /info   │ WSS  join_session, add_piece,
-                ▼                                               ▼      remove_piece, player_finished
+                │ HTTPS  POST /api/sessions, /join, GET /info   │ WSS  join_session, add_piece, remove_piece,
+                ▼                                               ▼      player_finished, kick_player
 ┌──────────────────────────── Backend (Node.js) ────────────────────────────────────┐
 │ Express (validazione, rate limit, Helmet/CSP) · Socket.IO (auth con token)        │
-│ Stato partite in memoria + persistenza SQLite · chiusura e pulizia automatiche     │
-│ Pagine web: /join/:codice (invito), /privacy · /api/health                         │
+│ Stato partite in memoria + persistenza SQLite · modifiche serializzate per giocatore│
+│ Chiusura e pulizia automatiche · Pagine web: /join/:codice, /privacy · /api/health │
 └────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-- Il server è la fonte di verità della partita; il client applica gli snapshot ricevuti.
-- Ogni giocatore riceve `playerId` + `playerToken` alla creazione/ingresso: il socket si autentica con questi e le azioni valgono solo per il giocatore autenticato.
-- Le sessioni attive sono in memoria per la latenza e su SQLite per la persistenza; dopo un riavvio vengono ricaricate dal database.
+- Il server è la fonte di verità della partita; il client applica gli snapshot ricevuti (`session_update`, `game_ended`, `session_expired`, `player_kicked`).
+- Ogni giocatore riceve `playerId` + `playerToken` alla creazione/ingresso: il socket si autentica con questi e le azioni valgono solo per il giocatore autenticato. Chi crea la partita è l'host (`hostId`) e può rimuovere gli altri giocatori.
+- Le modifiche di ogni giocatore passano da una coda: si scrive prima su SQLite e poi in memoria, senza perdere tocchi ravvicinati. Dopo un riavvio le partite vengono ricaricate dal database.
+- **Pila di sushi**: ogni pezzo è un cerchio in un piccolo motore fisico (Verlet a passo fisso, attrito di Coulomb, pezzi a riposo statici) eseguito nel frame callback di Reanimated. I pezzi leggono la posizione direttamente dallo stato condiviso, senza render React per frame; quando la pila è ferma la simulazione si spegne.
 
 ## Struttura del progetto
 
 ```
 sushi-streak-game/
-├── sushi-game-app/            App Expo (Android)
-│   ├── App.tsx                Provider, error boundary, splash
-│   ├── app.config.ts          Configurazione Expo per ambiente (APP_VARIANT)
-│   ├── eas.json               Profili di build EAS
-│   ├── assets/                Icone, splash, suoni, immagini del sushi
+├── sushi-game-app/              App Expo (Android)
+│   ├── App.tsx                  Provider, font, error boundary, splash
+│   ├── app.config.ts            Configurazione Expo per ambiente (APP_VARIANT) e versione
+│   ├── eas.json                 Profili di build EAS
+│   ├── assets/                  Icone, splash, suoni, immagini del sushi, motivo seigaiha
+│   ├── scripts/                 Varianti di build, versionCode dalla versione
 │   └── src/
-│       ├── components/        SushiStack (+ motore fisico), SakuraCelebration, ui/ (design system)
-│       ├── navigation/        Stack e tipi delle rotte
-│       ├── screens/           Home, GameSession, SessionHistory, Settings
-│       ├── services/          api, socketService, sessionStorage, preferences, shareService
-│       ├── store/             gameStore (Zustand)
-│       ├── theme/             Temi chiaro/scuro e provider
-│       └── utils/             logger, sessionCode, SoundManager
-├── sushi-game-backend/        Server Node.js
-│   ├── server.js              API REST, Socket.IO, manutenzione sessioni
-│   ├── db.js                  Schema e migrazioni SQLite
-│   ├── joinPage.js            Pagina web di invito
-│   ├── privacyPage.js         Informativa privacy (/privacy)
-│   ├── logger.js              Log strutturati JSON
-│   ├── scripts/backup.js      Backup consistente del database
-│   └── test/                  Test di integrazione (node:test)
-├── docs/                      Release, deploy, privacy / Data Safety, asset Play Store
-├── .github/                   CI, release, Dependabot, template
-└── start.ps1                  Avvio locale di backend e app (Windows)
+│       ├── components/          SushiStack, SakuraCelebration, ErrorBoundary
+│       │   ├── sushiStack/      Motore fisico (worklet) e forme dei pezzi
+│       │   └── ui/              Design system: AppButton, Panel, Field, Sheet, Hanko, Seigaiha…
+│       ├── navigation/          Stack e tipi delle rotte
+│       ├── screens/             Home, GameSession, SessionHistory, Settings
+│       ├── services/            api, socketService, sessionStorage, preferences, shareService
+│       ├── store/               gameStore (Zustand)
+│       ├── theme/               Palette, tipografia, temi chiaro/scuro e provider
+│       └── utils/               logger, sessionCode, SoundManager
+├── sushi-game-backend/          Server Node.js
+│   ├── server.js                API REST, Socket.IO, manutenzione sessioni
+│   ├── db.js                    Schema e migrazioni SQLite
+│   ├── joinPage.js              Pagina web di invito
+│   ├── privacyPage.js           Informativa privacy (/privacy)
+│   ├── logger.js                Log strutturati JSON
+│   ├── scripts/backup.js        Backup consistente del database
+│   └── test/                    Test di integrazione (node:test)
+├── docs/                        Release, deploy, privacy / Data Safety, screenshot, asset Play Store
+├── .github/                     CI, release, APK di test, Dependabot, template
+├── CLAUDE.md                    Regole del progetto per Claude Code
+└── start.ps1                    Avvio locale di backend e app (Windows)
 ```
 
-## Requisiti
-
-- Node.js **22 LTS** (minimo 20.19 per l'app, 20.17 per il backend) e npm
-- Per provare l'app: un dispositivo Android con la build di sviluppo installata, oppure un emulatore Android
-- Per le build: account [Expo](https://expo.dev) con accesso al progetto EAS; per build locali, Android Studio (JDK 17+ e Android SDK 36)
-
 ## Sviluppo locale
+
+Requisiti: Node.js **22 LTS** (minimo 20.19 per l'app, 20.17 per il backend) e npm; per provare l'app un dispositivo o emulatore Android con la build di sviluppo; per le build un account [Expo](https://expo.dev) con accesso al progetto EAS, oppure Android Studio (JDK 17+ e Android SDK 36) per le build locali.
 
 ```bash
 git clone https://github.com/Stevatero/sushi-streak-game.git
@@ -169,6 +221,7 @@ L'app usa il dev client di Expo: installa sul dispositivo una build `development
 | `EXPO_PUBLIC_API_URL`    | `https://sushi.dietalab.net` | Backend usato dall'app                                                              |
 | `EXPO_PUBLIC_PUBLIC_URL` | `https://sushi.dietalab.net` | Dominio dei link di invito e dell'informativa                                       |
 | `APP_VARIANT`            | `production`                 | `development` / `preview` / `production`: nome, application ID e deep link dell'app |
+| `ANDROID_VERSION_CODE`   | gestito da EAS               | `versionCode` per le build fuori da EAS (il workflow APK lo ricava dalla versione)  |
 
 ### Backend (`sushi-game-backend/.env.example`)
 
@@ -203,21 +256,25 @@ npm run lint && npm run format:check && npm test
 
 I test coprono le parti a maggior rischio di regressione:
 
-- **App**: validazione dei codici e deep link, client API, riconnessione e rejoin del socket, store di gioco, storage con dati corrotti o legacy, error boundary, flussi Home (creazione/ingresso) e Partita (pezzi online/offline, conferma di fine, salvataggio automatico).
-- **Backend**: autenticazione con token, robustezza agli eventi malformati, fine partita, ricarica dopo riavvio, XSS e CSP delle pagine web, health check, backup.
+- **App**: motore fisico della pila (stabilità, pezzi sospesi, bordi, tempi di assestamento) e sincronizzazione tra punteggio e pezzi; validazione dei codici e deep link; client API; riconnessione e rejoin del socket; store di gioco; storage con dati corrotti o legacy; error boundary; flussi Home (creazione, ingresso, doppio tocco, incolla) e Partita (pezzi online/offline, conferma di fine, pareggi, rimozione dei giocatori, salvataggio automatico); versionCode.
+- **Backend**: autenticazione con token, robustezza agli eventi malformati, tocchi concorrenti senza perdite, rimozione dei giocatori e permessi dell'host, fine partita, ricarica dopo riavvio, XSS e CSP delle pagine web, link della pagina di invito, health check, backup.
 
-## Build e release Android
+## Versioni, build e rilasci
 
-| Comando (`sushi-game-app`)  | Risultato                                                    |
-| --------------------------- | ------------------------------------------------------------ |
-| `npm run build:dev`         | Dev client (`com.stevatero.sushistreakapp.dev`)              |
-| `npm run build:preview`     | APK interno di test (`com.stevatero.sushistreakapp.preview`) |
-| `npm run build:production`  | **AAB** firmato per il Play Store                            |
-| `npm run submit:production` | Invio dell'ultimo AAB alla traccia interna di Google Play    |
+La versione segue [SemVer](https://semver.org/lang/it/) ed è unica per tutto il progetto: `sushi-game-app/package.json` (= `versionName` Android e versione mostrata nelle Impostazioni) e `sushi-game-backend/package.json` (mostrata da `/api/health`). **Ogni modifica che viene compilata aggiorna la versione** (PATCH per correzioni, MINOR per nuove funzionalità, MAJOR per cambi incompatibili del protocollo) e porta le voci di `Unreleased` nella nuova sezione del [CHANGELOG](CHANGELOG.md).
+
+| Come                                     | Risultato                                                                               |
+| ---------------------------------------- | --------------------------------------------------------------------------------------- |
+| Actions → **APK Android** → Run workflow | APK di test senza EAS, pubblicato in `apk-<variante>-vX.Y.Z` e nel link fisso `-latest` |
+| `npm run build:dev`                      | Dev client EAS (`com.stevatero.sushistreakapp.dev`)                                     |
+| `npm run build:preview`                  | APK interno di test su EAS (`com.stevatero.sushistreakapp.preview`)                     |
+| `npm run build:production`               | **AAB** firmato per il Play Store (`versionCode` incrementato da EAS)                   |
+| `npm run submit:production`              | Invio dell'ultimo AAB alla traccia interna di Google Play                               |
+| Tag `vX.Y.Z`                             | GitHub Release con le note del CHANGELOG e, con `EXPO_TOKEN`, build AAB su EAS          |
+
+Il workflow APK si ferma se la versione è già stata compilata da un altro commit, così ogni APK corrisponde a una versione diversa.
 
 Configurazione Android: `targetSdk`/`compileSdk` 36, `minSdk` 24, R8 e riduzione delle risorse, backup disabilitato, permessi minimi, App Links verificati su `sushi.dietalab.net/join`.
-
-Il versioning segue SemVer: `versionName` = versione in `sushi-game-app/package.json`, `versionCode` incrementato da EAS. Ogni rilascio ha un tag `vX.Y.Z` e una GitHub Release; la release marcata _Latest_ corrisponde alla versione in produzione sul Play Store.
 
 Procedura completa e checklist Play Store: **[docs/RELEASING.md](docs/RELEASING.md)**. Deploy del backend, monitoraggio e backup: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
 
@@ -227,20 +284,24 @@ Procedura completa e checklist Play Store: **[docs/RELEASING.md](docs/RELEASING.
 | ------------------------------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [CI](.github/workflows/ci.yml)                   | Push su `main`, pull request | Backend (Node 20 e 22): lint, formattazione, test, audit. App: lint, typecheck, formattazione, test con coverage, expo-doctor, build del bundle Android, audit. Scansione secrets con gitleaks. |
 | [Release](.github/workflows/release.yml)         | Tag `vX.Y.Z`                 | Verifica versione e CHANGELOG, crea la GitHub Release e, con `EXPO_TOKEN` configurato, avvia la build AAB su EAS (submit opzionale).                                                            |
-| [APK Android](.github/workflows/android-apk.yml) | Manuale (Run workflow)       | Compila un APK di test (`preview` o `production`, anche solo arm64) senza EAS e lo pubblica come asset di una pre-release `apk-<variante>-<commit>`.                                            |
+| [APK Android](.github/workflows/android-apk.yml) | Manuale (Run workflow)       | Compila un APK di test (`preview` o `production`, completo o solo arm64) senza EAS e lo pubblica nelle pre-release `apk-<variante>-vX.Y.Z` e `apk-<variante>-latest`.                           |
 | [Dependabot](.github/dependabot.yml)             | Settimanale                  | Aggiornamenti raggruppati di dipendenze e GitHub Actions (Expo/React Native esclusi: si aggiornano con l'SDK).                                                                                  |
 
 ## Sicurezza e privacy
 
 - Comunicazione solo HTTPS/WSS; token dei giocatori conservati come hash sul server; validazione degli input e rate limiting; Helmet e CSP con nonce.
-- Nessun account, nessun analytics o SDK pubblicitario; i dati delle partite vengono cancellati automaticamente dopo 30 giorni dalla chiusura.
+- Nessun account, nessun analytics o SDK pubblicitario; i dati delle partite vengono cancellati automaticamente dopo 30 giorni dalla chiusura, e subito per un giocatore rimosso dall'host.
 - Informativa: [sushi.dietalab.net/privacy](https://sushi.dietalab.net/privacy) · Inventario dei dati e questionario Data Safety: [docs/DATA_SAFETY.md](docs/DATA_SAFETY.md).
 - Segnalazione di vulnerabilità: [SECURITY.md](SECURITY.md).
 
 ## Roadmap
 
-- [ ] Aggiornamento a Expo SDK 57 (risolve gli advisory residui delle dipendenze di build)
+- [x] Animazione della pila di sushi fluida (fisica sul thread UI)
+- [x] Nuova interfaccia con richiamo allo stile giapponese, tema scuro
+- [x] Rimozione dei giocatori da parte dell'host
+- [ ] Nuova icona e splash screen nello stile della nuova interfaccia
 - [ ] Prima pubblicazione su Google Play (traccia interna → chiusa → produzione)
+- [ ] Aggiornamento a Expo SDK 57 (risolve gli advisory residui delle dipendenze di build)
 - [ ] Crash reporting opt-in (es. Sentry) tramite l'hook già presente in `src/utils/logger.ts`
 - [ ] Localizzazione in inglese
 - [ ] Supporto iOS (configurazione già presente, non ancora testata né pubblicata)

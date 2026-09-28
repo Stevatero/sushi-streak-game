@@ -6,8 +6,8 @@ Riceve correzioni di sicurezza solo l'ultima versione pubblicata dell'app e il b
 
 | Versione | Supportata |
 | -------- | ---------- |
-| 1.2.x    | ✅         |
-| < 1.2    | ❌         |
+| 1.3.x    | ✅         |
+| < 1.3    | ❌         |
 
 ## Segnalare una vulnerabilità
 
