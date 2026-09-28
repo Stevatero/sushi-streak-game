@@ -1,4 +1,4 @@
-# Release e pubblicazione sul Google Play Store
+# Release e pubblicazione (Google Play e App Store)
 
 ## Versioning
 
@@ -6,6 +6,7 @@
 | --------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------- |
 | Versione app (`versionName`)            | `sushi-game-app/package.json` → letta da `app.config.ts` | [SemVer](https://semver.org/lang/it/): `MAJOR.MINOR.PATCH` |
 | Codice versione Android (`versionCode`) | Gestito da EAS (`appVersionSource: remote`)              | Incrementato automaticamente a ogni build `production`     |
+| Numero di build iOS (`buildNumber`)     | Gestito da EAS (`appVersionSource: remote`)              | Incrementato automaticamente a ogni build `production`     |
 | `versionCode` degli APK di test         | Workflow "APK Android" (`scripts/version-code.js`)       | `MAJOR*10000 + MINOR*100 + PATCH` (es. 1.3.0 → 10300)      |
 | Versione backend                        | `sushi-game-backend/package.json`                        | SemVer; mostrata da `/api/health`                          |
 | Tag Git                                 | `vX.Y.Z`                                                 | Uno per ogni versione dell'app rilasciata                  |
@@ -45,12 +46,13 @@
 
 ## Ambienti
 
-| Profilo EAS      | `APP_VARIANT` | Application ID                         | Uso                                         |
-| ---------------- | ------------- | -------------------------------------- | ------------------------------------------- |
-| `development`    | development   | `com.stevatero.sushistreakapp.dev`     | Dev client per lo sviluppo                  |
-| `preview`        | preview       | `com.stevatero.sushistreakapp.preview` | APK interno per test                        |
-| `production`     | production    | `com.stevatero.sushistreakapp`         | AAB per il Play Store                       |
-| `production-apk` | production    | `com.stevatero.sushistreakapp`         | APK di produzione per installazione diretta |
+| Profilo EAS         | `APP_VARIANT` | Application ID / bundle ID iOS         | Uso                                                       |
+| ------------------- | ------------- | -------------------------------------- | --------------------------------------------------------- |
+| `development`       | development   | `com.stevatero.sushistreakapp.dev`     | Dev client per lo sviluppo                                |
+| `preview`           | preview       | `com.stevatero.sushistreakapp.preview` | APK interno (Android), build ad hoc per iPhone registrati |
+| `preview-simulator` | preview       | `com.stevatero.sushistreakapp.preview` | App per il Simulatore iOS (non serve un account Apple)    |
+| `production`        | production    | `com.stevatero.sushistreakapp`         | AAB per il Play Store, build per App Store / TestFlight   |
+| `production-apk`    | production    | `com.stevatero.sushistreakapp`         | APK di produzione per installazione diretta               |
 
 Il backend è unico (`https://sushi.dietalab.net`). Per usarne un altro in una build, imposta `EXPO_PUBLIC_API_URL` nella sezione `env` del profilo in `eas.json` o come variabile d'ambiente EAS.
 
@@ -76,6 +78,32 @@ cd android && ./gradlew bundleRelease   # app/build/outputs/bundle/release/app-r
 
 Senza configurazione di firma, la build locale è firmata con la chiave di debug: va bene per le verifiche, non per il Play Store. Per pubblicare usa EAS, oppure configura la firma in `android/app/build.gradle` leggendo keystore e password da variabili d'ambiente (mai committati).
 
+## iOS (App Store)
+
+L'app è la stessa su Android e iOS (stesso codice, stesse funzioni). Le build iOS si fanno con EAS nel cloud: **non serve un Mac**, tranne per usare il Simulatore.
+
+Configurazione già nel repository: bundle identifier `com.stevatero.sushistreakapp` (con i suffissi delle varianti), solo iPhone (su iPad l'app gira in modalità iPhone), orientamento verticale, iOS 15.1+, Universal Links `applinks:sushi.dietalab.net` nella build di produzione, `ITSAppUsesNonExemptEncryption = false` (niente documentazione sull'esportazione della crittografia), dati locali esclusi dal backup iCloud, nessuna richiesta di permessi (microfono disattivato).
+
+| Comando (`sushi-game-app`)      | Cosa serve                                    | Risultato                                                               |
+| ------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------- |
+| `npm run build:ios:simulator`   | Solo account Expo                             | `.app` da trascinare nel Simulatore iOS di Xcode (su Mac)               |
+| `npm run build:ios:preview`     | Apple Developer Program + `eas device:create` | Build ad hoc installabile dagli iPhone registrati (link/QR di EAS)      |
+| `npm run build:ios:production`  | Apple Developer Program                       | Build firmata per App Store Connect (`buildNumber` incrementato da EAS) |
+| `npm run submit:ios:production` | App creata in App Store Connect               | Invio dell'ultima build a TestFlight, poi revisione e pubblicazione     |
+
+Alla prima build `eas build -p ios` chiede di accedere con l'Apple ID e crea certificato di distribuzione e provisioning profile, abilitando la capability **Associated Domains** sull'App ID. Credenziali da conservare: `eas credentials -p ios`.
+
+### Checklist App Store (prima pubblicazione)
+
+- [ ] Iscrizione all'[Apple Developer Program](https://developer.apple.com/programs/) (99 USD/anno) e annotazione del **Team ID** (developer.apple.com → Membership).
+- [ ] App Store Connect → App → **+ Nuova app**: piattaforma iOS, bundle ID `com.stevatero.sushistreakapp`, lingua principale italiano, SKU a scelta.
+- [ ] Backend: impostare `APPLE_TEAM_ID` (Universal Links) e, dopo la pubblicazione, `IOS_APP_STORE_URL` (link di download e Smart App Banner nella pagina di invito). Verifica: `https://sushi.dietalab.net/.well-known/apple-app-site-association`.
+- [ ] Scheda: nome, sottotitolo, descrizione, parole chiave, URL di supporto (es. pagina GitHub), URL dell'informativa `https://sushi.dietalab.net/privacy`, categoria (es. Giochi → Party o Stile di vita).
+- [ ] Screenshot iPhone da 6,9" (1320×2868 o 1290×2796): si possono ricavare dal Simulatore.
+- [ ] **Privacy dell'app**: vedi [DATA_SAFETY.md](DATA_SAFETY.md#app-store-connect-privacy-dellapp).
+- [ ] Classificazione per età (questionario, nessun contenuto sensibile) e prezzo (gratis).
+- [ ] Test con **TestFlight**, poi invio in revisione. Per la revisione Apple indica nelle note come provare l'app: crea una partita dalla Home (non servono account).
+
 ## Firma dell'app
 
 - La chiave di upload Android è **gestita da EAS** (`eas credentials`): non è nel repository e non va mai committata.
@@ -89,6 +117,8 @@ Senza configurazione di firma, la build locale è firmata con la chiave di debug
 | `EXPO_TOKEN`                       | GitHub → Settings → Secrets and variables → Actions (ambiente `production`) | Build e submit EAS dalla CI ([crea token](https://expo.dev/settings/access-tokens)) |
 | Service account Google Play (JSON) | Caricato in EAS: `eas credentials -p android` → _Google Service Account_    | `eas submit` verso la Play Console                                                  |
 | `ANDROID_CERT_SHA256`              | Variabile d'ambiente del backend                                            | Verifica degli App Links (`/.well-known/assetlinks.json`)                           |
+| `APPLE_TEAM_ID`                    | Variabile d'ambiente del backend                                            | Universal Links iOS (`/.well-known/apple-app-site-association`)                     |
+| Chiave API App Store Connect       | Caricata in EAS: `eas credentials -p ios` (facoltativa)                     | `eas submit -p ios` senza inserire ogni volta l'Apple ID                            |
 
 ## Checklist Google Play (prima pubblicazione)
 

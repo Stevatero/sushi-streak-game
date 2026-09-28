@@ -1,6 +1,6 @@
 # Sushi Streak — istruzioni per Claude
 
-App Android (Expo / React Native) per contare in tempo reale i pezzi di sushi mangiati con gli amici, con backend Node.js + Socket.IO + SQLite. Documentazione generale nel [README](README.md).
+App per Android e iOS (Expo / React Native) per contare in tempo reale i pezzi di sushi mangiati con gli amici, con backend Node.js + Socket.IO + SQLite. Documentazione generale nel [README](README.md).
 
 ## Regole del progetto
 
@@ -28,6 +28,8 @@ cd sushi-game-backend && npm run lint && npm run format:check && npm test
 ## Note tecniche
 
 - **Pila di sushi** (`sushi-game-app/src/components/sushiStack/physics.ts`): motore fisico eseguito come worklet sul thread UI. Il plugin dei worklet trasforma le funzioni in espressioni non "hoisted": ogni worklet va dichiarato prima delle funzioni che lo chiamano. Le modifiche ai parametri vanno verificate con `physics.test.ts` (stabilità, pezzi sospesi, tempo di assestamento).
-- **Design system** in `sushi-game-app/src/theme/theme.ts` e `src/components/ui/`: usa `useAppTheme()`, i token `typography`/`radii` e i componenti esistenti (`AppButton`, `Panel`, `Sheet`, `Field`, `Hanko`…) invece di stili ad hoc.
+- **Design system** in `sushi-game-app/src/theme/theme.ts` e `src/components/ui/`: usa `useAppTheme()`, i token `typography`/`radii` e i componenti esistenti (`AppButton`, `Panel`, `Sheet`, `ConfirmSheet`, `Field`, `Hanko`…) invece di stili ad hoc.
+- **Conferme e avvisi**: niente `Alert.alert` (aspetto diverso tra Android e iOS). Usa `ConfirmSheet` con le opzioni (`seal`, `title`, `message`, `confirmLabel`, `cancelLabel`, `destructive`…) e gestisci tutte le finestre della schermata con `useExclusiveModal`: su iOS una Modal non si apre mentre un'altra si sta chiudendo, e l'hook apre la successiva (o esegue la navigazione con `afterModalClose`) solo al termine della dissolvenza.
+- **Multipiattaforma**: ogni modifica deve funzionare su Android e iOS. Verifica il bundle iOS con `npm run export:ios` e, se cambia la configurazione nativa, `APP_VARIANT=production npx expo prebuild -p ios --no-install` in una copia del progetto (non committare `ios/`).
 - **Protocollo**: il server è la fonte di verità. Eventi socket: `join_session`, `add_piece`, `remove_piece`, `player_finished`, `kick_player` (solo host); il server invia `session_update`, `game_ended`, `session_expired`, `player_kicked`. Le modifiche devono restare compatibili con l'app già pubblicata o richiedono una MAJOR.
 - **APK di test**: in questo ambiente cloud `dl.google.com` (Android SDK) è bloccato. Si compila con il workflow GitHub Actions `android-apk.yml` (Actions → "APK Android"), che pubblica l'APK in una pre-release e aggiorna il link fisso `apk-<variante>-latest`.

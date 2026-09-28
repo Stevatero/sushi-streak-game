@@ -7,6 +7,33 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-09-28
+
+Conferme nello stile dell'app, annullamento animato e preparazione per iOS.
+
+> L'app 1.4.0 funziona con il backend 1.3.0; il backend 1.4.0 serve solo per gli Universal Links e i link all'App Store della pagina di invito.
+
+### Aggiunto
+
+- Annullando l'ultimo pezzo, questo si gonfia, ruota e svanisce dalla pila con un suono "bop".
+- Supporto iOS: bundle identifier, Universal Links (`applinks:sushi.dietalab.net`) per la build di produzione, profili EAS e script per le build iOS (anche per il simulatore, senza account Apple), bundle iOS verificato in CI.
+- Backend: `/.well-known/apple-app-site-association` per gli Universal Links (variabile `APPLE_TEAM_ID`, facoltativa `IOS_BUNDLE_ID`).
+- Pagina di invito: su iPhone il link di download porta all'App Store (`IOS_APP_STORE_URL`) e compare lo Smart App Banner di Safari; finché l'app iOS non è pubblicata il link a Google Play non viene mostrato.
+
+### Modificato
+
+- Tutte le conferme e gli avvisi (fine della partita, uscita, rimozione di un giocatore, sessione scaduta o non disponibile, eliminazione dallo storico, cancellazione dei dati) usano un pannello nello stile dell'app, con timbro hanko e motivo seigaiha, al posto delle finestre di sistema. Aspetto identico su Android e iOS.
+- Conferma "Ho finito": riepilogo dei pezzi mangiati e della posizione in classifica.
+- Partita: "I tuoi pezzi", nome della sessione e "Tocca per invitare" centrati.
+- I suoni si mescolano alla musica di altre app invece di interromperla e su iPhone rispettano il tasto silenzioso.
+- Condivisione: su iOS il link di invito non viene più duplicato nel messaggio.
+- Su iPad l'app gira in modalità iPhone (solo verticale).
+
+### Corretto
+
+- Su iOS una finestra (es. la classifica finale o il nome del ristorante) poteva non aprirsi se un'altra si stava ancora chiudendo: le finestre ora si aprono una alla volta, al termine della chiusura della precedente.
+- La classifica nel pannello a scomparsa non permette più di aprire la rimozione di un giocatore sopra il pannello stesso.
+
 ## [1.3.0] - 2026-09-28
 
 Nuova interfaccia, animazione della pila di sushi riscritta e miglioramenti del server.
@@ -92,6 +119,7 @@ Prima versione preparata per la pubblicazione sul Google Play Store.
 
 Versione di sviluppo interna, non pubblicata sugli store.
 
-[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Stevatero/sushi-streak-game/releases/tag/v1.2.0
