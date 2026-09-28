@@ -36,12 +36,12 @@ Nessun SDK di terze parti che invia dati (niente analytics, pubblicità o crash 
 
 ## Risposte proposte per il questionario
 
-| Domanda                                                  | Risposta proposta                                                                                                                    |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| L'app raccoglie o condivide dati utente obbligatori?     | **Sì** (raccoglie)                                                                                                                   |
-| Tutti i dati sono criptati in transito?                  | **Sì** (HTTPS/WSS)                                                                                                                   |
-| Gli utenti possono richiedere la cancellazione dei dati? | **Sì**: dati locali dall'app; dati sul server tramite il contatto indicato in `/privacy` (e cancellazione automatica dopo 30 giorni) |
-| Dati condivisi con terze parti                           | **Nessuno**                                                                                                                          |
+| Domanda                                                  | Risposta proposta                                                                                                                                                                  |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L'app raccoglie o condivide dati utente obbligatori?     | **Sì** (raccoglie)                                                                                                                                                                 |
+| Tutti i dati sono criptati in transito?                  | **Sì** (HTTPS/WSS)                                                                                                                                                                 |
+| Gli utenti possono richiedere la cancellazione dei dati? | **Sì**: dati locali dall'app; dati sul server tramite il contatto indicato in `/privacy` (e cancellazione automatica dopo 30 giorni, immediata per un giocatore rimosso dall'host) |
+| Dati condivisi con terze parti                           | **Nessuno**                                                                                                                                                                        |
 
 **Tipi di dati raccolti**
 

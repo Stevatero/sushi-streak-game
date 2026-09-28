@@ -7,6 +7,12 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-28
+
+Nuova interfaccia, animazione della pila di sushi riscritta e miglioramenti del server.
+
+> L'app 1.3.0 funziona anche con il backend 1.2.0; la rimozione dei giocatori richiede il backend 1.3.0.
+
 ### Aggiunto
 
 - Podio nella classifica finale e gestione dei pareggi: a pari punteggio si condivide la posizione e la vittoria (anche nello storico).
@@ -14,6 +20,7 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 - Storico: riepilogo con partite giocate, pezzi mangiati e record.
 - Chi crea la partita può rimuovere un giocatore toccandolo in classifica; il giocatore rimosso viene avvisato e non può rientrare con le vecchie credenziali.
 - Pagina di invito: su Android il pulsante "Apri nell'app" porta allo store se l'app non è installata (`APP_STORE_URL`, default Google Play) ed è presente un link per scaricarla.
+- Workflow GitHub Actions "APK Android" per compilare APK di test senza EAS, con link fisso all'ultima build.
 
 ### Modificato
 
@@ -85,5 +92,6 @@ Prima versione preparata per la pubblicazione sul Google Play Store.
 
 Versione di sviluppo interna, non pubblicata sugli store.
 
-[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Stevatero/sushi-streak-game/releases/tag/v1.2.0

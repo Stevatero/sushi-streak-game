@@ -6,8 +6,11 @@
 | --------------------------------------- | -------------------------------------------------------- | ---------------------------------------------------------- |
 | Versione app (`versionName`)            | `sushi-game-app/package.json` → letta da `app.config.ts` | [SemVer](https://semver.org/lang/it/): `MAJOR.MINOR.PATCH` |
 | Codice versione Android (`versionCode`) | Gestito da EAS (`appVersionSource: remote`)              | Incrementato automaticamente a ogni build `production`     |
+| `versionCode` degli APK di test         | Workflow "APK Android" (`scripts/version-code.js`)       | `MAJOR*10000 + MINOR*100 + PATCH` (es. 1.3.0 → 10300)      |
 | Versione backend                        | `sushi-game-backend/package.json`                        | SemVer; mostrata da `/api/health`                          |
 | Tag Git                                 | `vX.Y.Z`                                                 | Uno per ogni versione dell'app rilasciata                  |
+
+**Ogni modifica che viene compilata (APK di test, build EAS, rilascio) aggiorna la versione**: il workflow "APK Android" si ferma se la stessa versione è già stata compilata da un altro commit.
 
 - **PATCH**: correzioni senza cambi di comportamento.
 - **MINOR**: nuove funzionalità compatibili.
@@ -57,7 +60,7 @@ Il backend è unico (`https://sushi.dietalab.net`). Per usarne un altro in una b
 
 ### APK di test da GitHub Actions (senza EAS)
 
-Il workflow **APK Android** (Actions → _APK Android_ → _Run workflow_) compila un APK sui runner GitHub, che includono Android SDK e NDK, e lo allega a una pre-release `apk-<variante>-<commit>`. È firmato con la chiave di debug del template Expo: va bene per provare l'app, ma non aggiorna versioni installate da EAS o dal Play Store (la variante `preview` si installa accanto a quella pubblicata).
+Il workflow **APK Android** (Actions → _APK Android_ → _Run workflow_) compila un APK sui runner GitHub, che includono Android SDK e NDK, e lo allega a due pre-release: `apk-<variante>-vX.Y.Z` (una per versione) e `apk-<variante>-latest` (sempre l'ultima build, con nome file fisso: il link di download non cambia). Si può scegliere l'APK completo (arm64 + armeabi-v7a) o solo arm64, più leggero. Le istruzioni di installazione sono nelle note della release e nel README. È firmato con la chiave di debug del template Expo: va bene per provare l'app, ma non aggiorna versioni installate da EAS o dal Play Store (la variante `preview` si installa accanto a quella pubblicata).
 
 ### Build locale di rilascio (senza EAS)
 

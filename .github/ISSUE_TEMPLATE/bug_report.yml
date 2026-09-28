@@ -26,8 +26,8 @@ body:
     id: version
     attributes:
       label: Versione dell'app
-      description: Impostazioni → Crediti
-      placeholder: '1.2.0'
+      description: Impostazioni → Info
+      placeholder: '1.3.0'
     validations:
       required: true
   - type: input

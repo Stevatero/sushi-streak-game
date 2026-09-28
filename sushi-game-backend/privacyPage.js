@@ -4,7 +4,7 @@
 
 const { escapeHtml } = require('./joinPage');
 
-const LAST_UPDATED = '25 settembre 2026';
+const LAST_UPDATED = '28 settembre 2026';
 
 function renderPrivacyPage({ contact, retentionDays, inactivityMinutes, nonce = '' }) {
   const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
@@ -56,7 +56,8 @@ function renderPrivacyPage({ contact, retentionDays, inactivityMinutes, nonce = 
       <td>Mostrarlo in classifica agli altri partecipanti</td>
       <td rowspan="3">Per tutta la durata della partita; la partita si chiude quando tutti hanno finito o dopo
         ${Number(inactivityMinutes)} minuti di inattività. I dati delle partite chiuse vengono cancellati
-        automaticamente dopo ${Number(retentionDays)} giorni.</td>
+        automaticamente dopo ${Number(retentionDays)} giorni. Se chi ha creato la partita ti rimuove, i tuoi dati
+        di quella partita vengono cancellati subito.</td>
     </tr>
     <tr><td>Codice/nome della sessione, punteggio (pezzi), stato "ho finito"</td><td>Funzionamento del gioco e della classifica in tempo reale</td></tr>
     <tr><td>Identificativo casuale del giocatore e token segreto (salvato come impronta crittografica)</td><td>Permettere la riconnessione alla partita e impedire che altri modifichino il tuo punteggio</td></tr>
