@@ -603,8 +603,8 @@ function createServer(options = {}) {
         if (error) return ack(error);
 
         if (!player.finished) {
-          player.finished = true;
           await db.run('UPDATE players SET finished = 1 WHERE id = ?', [player.id]);
+          player.finished = true;
           touch(session);
         }
 
