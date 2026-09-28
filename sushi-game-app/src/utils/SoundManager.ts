@@ -1,5 +1,5 @@
 // Gestore dei suoni dell'app (expo-audio)
-import { createAudioPlayer, AudioPlayer } from 'expo-audio';
+import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from 'expo-audio';
 import { preferences } from '../services/preferences';
 import { logger } from './logger';
 
@@ -11,8 +11,13 @@ class SoundManager {
   private piecePool: AudioPlayer[] = [];
   private pieceIndex = 0;
   private victoryPlayer: AudioPlayer | null = null;
+  private undoPlayer: AudioPlayer | null = null;
 
   private constructor() {
+    // Effetti brevi: si mescolano all'audio di altre app (musica) senza metterlo in pausa, su iOS e Android
+    setAudioModeAsync({ interruptionMode: 'mixWithOthers', playsInSilentMode: false }).catch((error) =>
+      logger.warn('Impossibile configurare la sessione audio', error)
+    );
     this.loadSounds();
     preferences.getSoundEnabled().then((enabled) => {
       this.soundEnabled = enabled;
@@ -39,6 +44,11 @@ class SoundManager {
       this.victoryPlayer = createAudioPlayer(require('../../assets/sounds/victory.mp3'));
     } catch (error) {
       logger.warn('Impossibile caricare il suono victory', error);
+    }
+    try {
+      this.undoPlayer = createAudioPlayer(require('../../assets/sounds/bop.wav'));
+    } catch (error) {
+      logger.warn('Impossibile caricare il suono bop', error);
     }
   }
 
@@ -72,8 +82,13 @@ class SoundManager {
     this.play(this.victoryPlayer);
   }
 
+  // "Bop" quando si annulla l'ultimo pezzo
+  public playUndoSound(): void {
+    this.play(this.undoPlayer);
+  }
+
   public unloadSounds(): void {
-    [...this.piecePool, this.victoryPlayer].forEach((player) => {
+    [...this.piecePool, this.victoryPlayer, this.undoPlayer].forEach((player) => {
       try {
         player?.remove();
       } catch (error) {
@@ -82,6 +97,7 @@ class SoundManager {
     });
     this.piecePool = [];
     this.victoryPlayer = null;
+    this.undoPlayer = null;
   }
 }
 

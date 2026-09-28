@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, Pressable, Alert } from 'react-native';
+import { View, Text, StyleSheet, FlatList, Pressable } from 'react-native';
 import { IconButton, Snackbar } from 'react-native-paper';
 import { useRoute, useNavigation, RouteProp } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,9 +20,11 @@ import SoundManager from '../utils/SoundManager';
 import { SessionStorageService, SavedSession } from '../services/sessionStorage';
 import { shareService } from '../services/shareService';
 import { RESTAURANT_NAME_MAX_LENGTH } from '../config';
+import { useExclusiveModal } from '../hooks/useExclusiveModal';
 import type { RootNavigationProp, RootStackParamList } from '../navigation/types';
 import { AppTheme, fonts, radii, typography, useAppTheme } from '../theme/theme';
 import AppButton from '../components/ui/AppButton';
+import ConfirmSheet, { ConfirmOptions } from '../components/ui/ConfirmSheet';
 import Field from '../components/ui/Field';
 import Hanko from '../components/ui/Hanko';
 import Panel from '../components/ui/Panel';
@@ -74,9 +76,11 @@ const GameSessionScreen = () => {
     }))
   );
 
-  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
-  const [showSaveModal, setShowSaveModal] = useState(false);
-  const [showShareModal, setShowShareModal] = useState(false);
+  // Finestre modali: classifica, nome del ristorante, invito e conferme (una alla volta)
+  const { modal, openModal, closeModal, afterModalClose } = useExclusiveModal<
+    'leaderboard' | 'restaurant' | 'share' | 'confirm'
+  >();
+  const [dialog, setDialog] = useState<ConfirmOptions | null>(null);
   const [showCelebration, setShowCelebration] = useState(false);
   const [finishRequested, setFinishRequested] = useState(false);
   const [restaurantName, setRestaurantName] = useState('');
@@ -86,7 +90,6 @@ const GameSessionScreen = () => {
   const restaurantRef = useRef('');
   const allowExitRef = useRef(false);
   const endHandledRef = useRef(false);
-  const celebrationTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Salvataggio iniziale della sessione attiva: la pulizia di fine partita deve avvenire dopo
   const activeSavedRef = useRef<Promise<void>>(Promise.resolve());
 
@@ -137,31 +140,41 @@ const GameSessionScreen = () => {
     return () => useGameStore.getState().resetGame();
   }, [sessionId, sessionName, playerId, playerName, playerToken, isHost, startSession]);
 
-  useEffect(
-    () => () => {
-      if (celebrationTimerRef.current) clearTimeout(celebrationTimerRef.current);
+  useEffect(() => {
+    if (!showCelebration) return;
+    const timer = setTimeout(() => setShowCelebration(false), CELEBRATION_DURATION_MS);
+    return () => clearTimeout(timer);
+  }, [showCelebration]);
+
+  const showDialog = useCallback(
+    (options: ConfirmOptions) => {
+      setDialog(options);
+      openModal('confirm');
     },
-    []
+    [openModal]
   );
 
-  // Uscita con conferma (tasto indietro Android): la partita resta riprendibile dalla Home
+  // Uscita con conferma (freccia, tasto o gesto indietro): la partita resta riprendibile dalla Home
   useEffect(() => {
     return navigation.addListener('beforeRemove', (e) => {
       if (allowExitRef.current || gameEnded) return;
       e.preventDefault();
-      Alert.alert('Uscire dalla partita?', 'Potrai rientrare dalla Home finché la sessione è attiva.', [
-        { text: 'Resta', style: 'cancel' },
-        {
-          text: 'Esci',
-          style: 'destructive',
-          onPress: () => {
-            allowExitRef.current = true;
-            navigation.dispatch(e.data.action);
-          },
+      showDialog({
+        seal: '帰',
+        kanji: 'またね',
+        title: 'Uscire dalla partita?',
+        message: 'I tuoi pezzi restano salvati: potrai rientrare dalla Home finché la sessione è attiva.',
+        confirmLabel: 'Esci dalla partita',
+        confirmIcon: 'logout',
+        destructive: true,
+        cancelLabel: 'Resta',
+        onConfirm: () => {
+          allowExitRef.current = true;
+          afterModalClose(() => navigation.dispatch(e.data.action));
         },
-      ]);
+      });
     });
-  }, [navigation, gameEnded]);
+  }, [navigation, gameEnded, showDialog, afterModalClose]);
 
   const persistResult = useCallback(
     async (list: Player[]) => {
@@ -203,26 +216,46 @@ const GameSessionScreen = () => {
     endHandledRef.current = true;
     activeSavedRef.current.then(() => SessionStorageService.clearActiveSession());
 
+    // Le finestre ancora aperte (es. una conferma) lasciano il posto all'esito della partita
+    const leaveGame = () => afterModalClose(goHome);
     if (endReason === 'ended') {
-      setShowLeaderboardModal(true);
+      openModal('leaderboard');
       if (iWon) {
         SoundManager.playVictorySound();
         setShowCelebration(true);
-        celebrationTimerRef.current = setTimeout(() => setShowCelebration(false), CELEBRATION_DURATION_MS);
       }
     } else if (endReason === 'expired') {
-      Alert.alert(
-        'Sessione scaduta',
-        'La sessione è stata chiusa per inattività. I punteggi sono stati salvati nello storico.'
-      );
+      showDialog({
+        seal: '時',
+        kanji: '時間切れ',
+        title: 'Sessione scaduta',
+        message: 'La sessione è stata chiusa per inattività. I punteggi sono stati salvati nello storico.',
+        confirmLabel: 'Ho capito',
+      });
     } else if (endReason === 'kicked') {
-      Alert.alert('Sei stato rimosso dalla partita', 'Chi ha creato la partita ti ha tolto dalla classifica.', [
-        { text: 'OK', onPress: () => goHome() },
-      ]);
+      showDialog({
+        seal: '退',
+        title: 'Sei stato rimosso dalla partita',
+        message: 'Chi ha creato la partita ti ha tolto dalla classifica.',
+        confirmLabel: 'Torna alla Home',
+        confirmIcon: 'home-outline',
+        dismissable: false,
+        onConfirm: leaveGame,
+        onCancel: leaveGame,
+      });
     } else if (endReason === 'unauthorized' || endReason === 'not_found') {
-      Alert.alert('Sessione non disponibile', 'Non è possibile rientrare in questa partita.', [
-        { text: 'OK', onPress: () => goHome() },
-      ]);
+      showDialog({
+        seal: '閉',
+        title: 'Sessione non disponibile',
+        message: 'Non è possibile rientrare in questa partita.',
+        confirmLabel: 'Torna alla Home',
+        confirmIcon: 'home-outline',
+        dismissable: false,
+        onConfirm: leaveGame,
+        onCancel: leaveGame,
+      });
+    } else {
+      closeModal();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameEnded, endReason]);
@@ -257,44 +290,72 @@ const GameSessionScreen = () => {
 
   const handleRemovePiece = async () => {
     const res = await removePiece();
+    // Il "bop" accompagna la scomparsa del pezzo dalla pila
+    if (res.ok) SoundManager.playUndoSound();
     setSnackbar(res.ok ? 'Ultimo pezzo annullato' : res.error || 'Impossibile annullare');
   };
 
+  const confirmFinish = async () => {
+    setFinishRequested(true);
+    const res = await finishGame();
+    if (!res.ok) {
+      setFinishRequested(false);
+      setSnackbar(res.error || 'Impossibile completare, riprova');
+      return;
+    }
+    if (!useGameStore.getState().gameEnded) openModal('leaderboard');
+  };
+
   const handleFinish = () => {
-    Alert.alert('Hai finito di mangiare?', 'Dopo la conferma non potrai più aggiungere pezzi.', [
-      { text: 'Annulla', style: 'cancel' },
-      {
-        text: 'Ho finito!',
-        onPress: async () => {
-          setFinishRequested(true);
-          const res = await finishGame();
-          if (!res.ok) {
-            setFinishRequested(false);
-            setSnackbar(res.error || 'Impossibile completare, riprova');
-            return;
-          }
-          setShowLeaderboardModal(true);
-        },
-      },
-    ]);
+    showDialog({
+      seal: '完',
+      kanji: 'ごちそうさま',
+      title: 'Hai finito di mangiare?',
+      message: 'Dopo la conferma non potrai più aggiungere pezzi.',
+      details: (
+        <View style={[styles.finishSummary, { backgroundColor: colors.surfaceVariant }]}>
+          <View style={styles.finishStat}>
+            <Text style={[styles.finishValue, { color: colors.onSurface }]}>{myScore}</Text>
+            <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>
+              {myScore === 1 ? 'pezzo mangiato' : 'pezzi mangiati'}
+            </Text>
+          </View>
+          {myRank > 0 ? (
+            <>
+              <View style={[styles.finishDivider, { backgroundColor: colors.outline }]} />
+              <View style={styles.finishStat}>
+                <Text style={[styles.finishValue, { color: colors.onSurface }]}>{`${myRank}°`}</Text>
+                <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>
+                  {`posto su ${players.length}`}
+                </Text>
+              </View>
+            </>
+          ) : null}
+        </View>
+      ),
+      confirmLabel: 'Sì, ho finito!',
+      confirmIcon: 'flag-checkered',
+      cancelLabel: 'Mangio ancora',
+      onConfirm: confirmFinish,
+    });
   };
 
   const copySessionCode = async () => {
     const success = await shareService.copySessionCode(sessionId);
-    setShowShareModal(false);
+    closeModal();
     setSnackbar(success ? 'Codice sessione copiato!' : 'Impossibile copiare il codice');
   };
 
   const shareSessionLink = async () => {
     const result = await shareService.shareSession(sessionId, sessionName);
-    setShowShareModal(false);
+    closeModal();
     if (result === 'error') setSnackbar('Impossibile condividere la sessione');
   };
 
   const saveRestaurant = async () => {
     restaurantRef.current = restaurantName.trim();
     await persistResult(useGameStore.getState().players);
-    setShowSaveModal(false);
+    closeModal();
     setSnackbar('Partita salvata nello storico');
   };
 
@@ -313,22 +374,25 @@ const GameSessionScreen = () => {
   };
 
   const confirmKick = (target: Player) => {
-    Alert.alert(`Rimuovere ${target.name}?`, 'Il giocatore uscirà dalla partita e dalla classifica.', [
-      { text: 'Annulla', style: 'cancel' },
-      {
-        text: 'Rimuovi',
-        style: 'destructive',
-        onPress: async () => {
-          const res = await kickPlayer(target.id);
-          setSnackbar(res.ok ? `${target.name} è stato rimosso` : res.error || 'Impossibile rimuovere il giocatore');
-        },
+    showDialog({
+      seal: '退',
+      title: `Rimuovere ${target.name}?`,
+      message: 'Il giocatore uscirà dalla partita e dalla classifica.',
+      confirmLabel: 'Rimuovi',
+      confirmIcon: 'account-remove-outline',
+      destructive: true,
+      cancelLabel: 'Annulla',
+      onConfirm: async () => {
+        const res = await kickPlayer(target.id);
+        setSnackbar(res.ok ? `${target.name} è stato rimosso` : res.error || 'Impossibile rimuovere il giocatore');
       },
-    ]);
+    });
   };
 
-  const renderPlayerRow = (item: Player) => {
+  // I giocatori si rimuovono dalla classifica sullo schermo, non da quella nel pannello a scomparsa
+  const renderPlayerRow = (item: Player, kickable = false) => {
     const isMe = item.id === playerId;
-    const canKick = amHost && !isMe && !gameEnded;
+    const canKick = kickable && amHost && !isMe && !gameEnded;
     return (
       <Pressable
         onPress={canKick ? () => confirmKick(item) : undefined}
@@ -377,7 +441,7 @@ const GameSessionScreen = () => {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <SushiStack pieceCount={myScore} />
       {/* Con la classifica finale aperta i petali cadono sopra il pannello */}
-      <SakuraCelebration isVisible={showCelebration && !showLeaderboardModal} />
+      <SakuraCelebration isVisible={showCelebration && modal !== 'leaderboard'} />
 
       {/* Barra superiore */}
       <View style={[styles.topBar, { paddingTop: insets.top + 6 }]}>
@@ -389,22 +453,22 @@ const GameSessionScreen = () => {
           style={[styles.roundIcon, { backgroundColor: colors.glass, borderColor: colors.outlineVariant }]}
         />
         <Pressable
-          onPress={canShare ? () => setShowShareModal(true) : undefined}
+          onPress={canShare ? () => openModal('share') : undefined}
           disabled={!canShare}
           accessibilityRole="button"
           accessibilityLabel="Condividi la sessione"
           style={[styles.sessionChip, { backgroundColor: colors.glass, borderColor: colors.outlineVariant }]}
         >
-          <View style={[styles.statusDot, { backgroundColor: connectionColor }]} />
-          <View style={styles.sessionChipText}>
-            <Text style={[styles.sessionCode, { color: colors.onSurface }]} numberOfLines={1}>
-              {sessionName || sessionId}
-            </Text>
-            <Text style={[typography.caption, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
+          <Text style={[styles.sessionCode, { color: colors.onSurface }]} numberOfLines={1}>
+            {sessionName || sessionId}
+          </Text>
+          <View style={styles.sessionStatus}>
+            <View style={[styles.statusDot, { backgroundColor: connectionColor }]} />
+            <Text style={[typography.caption, styles.shrink, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
               {canShare ? `${connectionLabel} · Tocca per invitare` : connectionLabel}
             </Text>
+            {canShare ? <MaterialCommunityIcons name="share-variant" size={13} color={colors.primary} /> : null}
           </View>
-          {canShare ? <MaterialCommunityIcons name="share-variant" size={18} color={colors.primary} /> : null}
         </Pressable>
         <IconButton
           icon="cog-outline"
@@ -430,7 +494,7 @@ const GameSessionScreen = () => {
 
       {/* Punteggio personale */}
       <View style={styles.hero}>
-        <SectionTitle label="I tuoi pezzi" kanji="貫" style={styles.heroLabel} />
+        <SectionTitle label="I tuoi pezzi" kanji="貫" centered style={styles.heroLabel} />
         <Text style={[styles.heroScore, { color: colors.onBackground }]} accessibilityLabel={`${myScore} pezzi`}>
           {myScore}
         </Text>
@@ -456,7 +520,7 @@ const GameSessionScreen = () => {
         <FlatList
           data={sortedPlayers}
           keyExtractor={(item) => item.id}
-          renderItem={({ item }) => renderPlayerRow(item)}
+          renderItem={({ item }) => renderPlayerRow(item, true)}
           style={styles.liveList}
           ItemSeparatorComponent={() => <View style={styles.separator} />}
         />
@@ -556,7 +620,7 @@ const GameSessionScreen = () => {
                 label="Ristorante"
                 icon="map-marker-outline"
                 variant="outline"
-                onPress={() => setShowSaveModal(true)}
+                onPress={() => openModal('restaurant')}
                 style={styles.flex}
               />
               <AppButton label="Nuova partita" icon="plus" onPress={goHome} style={styles.flex} />
@@ -567,8 +631,8 @@ const GameSessionScreen = () => {
 
       {/* Classifica finale */}
       <Sheet
-        visible={showLeaderboardModal}
-        onClose={() => setShowLeaderboardModal(false)}
+        visible={modal === 'leaderboard'}
+        onClose={closeModal}
         title={gameEnded ? 'Classifica finale' : 'Classifica attuale'}
         kanji="結果"
         overlay={<SakuraCelebration isVisible={showCelebration} />}
@@ -618,8 +682,8 @@ const GameSessionScreen = () => {
             label="Nuova partita"
             icon="plus"
             onPress={() => {
-              setShowLeaderboardModal(false);
-              goHome();
+              closeModal();
+              afterModalClose(goHome);
             }}
           />
           <View style={styles.endButtons}>
@@ -627,24 +691,16 @@ const GameSessionScreen = () => {
               label="Ristorante"
               icon="map-marker-outline"
               variant="outline"
-              onPress={() => {
-                setShowLeaderboardModal(false);
-                setShowSaveModal(true);
-              }}
+              onPress={() => openModal('restaurant')}
               style={styles.flex}
             />
-            <AppButton
-              label="Chiudi"
-              variant="ghost"
-              onPress={() => setShowLeaderboardModal(false)}
-              style={styles.flex}
-            />
+            <AppButton label="Chiudi" variant="ghost" onPress={closeModal} style={styles.flex} />
           </View>
         </View>
       </Sheet>
 
       {/* Nome del ristorante */}
-      <Sheet visible={showSaveModal} onClose={() => setShowSaveModal(false)} title="Dove avete mangiato?" kanji="店">
+      <Sheet visible={modal === 'restaurant'} onClose={closeModal} title="Dove avete mangiato?" kanji="店">
         <Field
           label="Nome del ristorante"
           placeholder="Es. Sushi Zen, Sakura…"
@@ -663,13 +719,13 @@ const GameSessionScreen = () => {
           <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>{winnerText}</Text>
         </View>
         <View style={styles.endButtons}>
-          <AppButton label="Annulla" variant="ghost" onPress={() => setShowSaveModal(false)} style={styles.flex} />
+          <AppButton label="Annulla" variant="ghost" onPress={closeModal} style={styles.flex} />
           <AppButton label="Salva" icon="check" onPress={saveRestaurant} style={styles.flex} />
         </View>
       </Sheet>
 
       {/* Invito */}
-      <Sheet visible={showShareModal} onClose={() => setShowShareModal(false)} title="Invita amici" kanji="招待">
+      <Sheet visible={modal === 'share'} onClose={closeModal} title="Invita amici" kanji="招待">
         <Text style={[typography.body, { color: colors.onSurfaceVariant }]}>
           Condividi il link oppure fai inserire il codice nella schermata iniziale.
         </Text>
@@ -684,6 +740,9 @@ const GameSessionScreen = () => {
           <AppButton label="Copia codice" icon="content-copy" variant="tonal" onPress={copySessionCode} />
         </View>
       </Sheet>
+
+      {/* Conferme e avvisi */}
+      <ConfirmSheet options={modal === 'confirm' ? dialog : null} onClose={closeModal} />
 
       <Snackbar
         visible={!!snackbar}
@@ -714,29 +773,38 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     margin: 0,
   },
+  // Nome della sessione e stato centrati tra i due pulsanti rotondi
   sessionChip: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'center',
     marginHorizontal: 6,
     paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 6,
     borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth,
-  },
-  sessionChipText: {
-    flex: 1,
   },
   sessionCode: {
     fontFamily: fonts.bold,
     fontSize: 15,
     letterSpacing: 1.2,
+    textAlign: 'center',
+    maxWidth: '100%',
+  },
+  sessionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    maxWidth: '100%',
+  },
+  shrink: {
+    flexShrink: 1,
   },
   statusDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
   connectionBanner: {
     flexDirection: 'row',
@@ -873,6 +941,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
+  },
+  finishSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radii.lg,
+    paddingVertical: 14,
+    marginTop: 18,
+  },
+  finishStat: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  finishValue: {
+    fontFamily: fonts.black,
+    fontSize: 30,
+    lineHeight: 34,
+    fontVariant: ['tabular-nums'],
+  },
+  finishDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
   },
   endButtons: {
     flexDirection: 'row',

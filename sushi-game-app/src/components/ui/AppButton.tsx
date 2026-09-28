@@ -4,7 +4,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
 import { fonts, radii, useAppTheme } from '../../theme/theme';
 
-type Variant = 'primary' | 'tonal' | 'outline' | 'ghost' | 'danger';
+// danger: azione distruttiva secondaria (solo testo); destructive: azione distruttiva principale (pieno)
+type Variant = 'primary' | 'tonal' | 'outline' | 'ghost' | 'danger' | 'destructive';
 
 interface AppButtonProps {
   label: string;
@@ -48,6 +49,7 @@ const AppButton: React.FC<AppButtonProps> = ({
     outline: { bg: 'transparent', fg: colors.onSurface, border: colors.outline },
     ghost: { bg: 'transparent', fg: colors.primary, border: 'transparent' },
     danger: { bg: 'transparent', fg: colors.error, border: 'transparent' },
+    destructive: { bg: colors.error, fg: colors.onError, border: colors.error },
   };
   const { bg, fg, border } = palette[variant];
 

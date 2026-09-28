@@ -7,13 +7,15 @@ interface SectionTitleProps {
   // Didascalia giapponese (es. 順位 per la classifica)
   kanji?: string;
   right?: React.ReactNode;
+  // Titolo centrato (senza contenuto a destra), es. sopra il punteggio della partita
+  centered?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
-const SectionTitle: React.FC<SectionTitleProps> = ({ label, kanji, right, style }) => {
+const SectionTitle: React.FC<SectionTitleProps> = ({ label, kanji, right, centered = false, style }) => {
   const { colors } = useAppTheme();
   return (
-    <View style={[styles.row, style]}>
+    <View style={[styles.row, centered && styles.centered, style]}>
       <Text style={[typography.label, { color: colors.onSurfaceVariant }]} accessibilityRole="header">
         {label}
       </Text>
@@ -22,8 +24,12 @@ const SectionTitle: React.FC<SectionTitleProps> = ({ label, kanji, right, style 
           {kanji}
         </Text>
       ) : null}
-      <View style={styles.spacer} />
-      {right}
+      {centered ? null : (
+        <>
+          <View style={styles.spacer} />
+          {right}
+        </>
+      )}
     </View>
   );
 };
@@ -34,6 +40,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
     minHeight: 20,
+  },
+  centered: {
+    justifyContent: 'center',
   },
   kanji: {
     marginLeft: 8,

@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import GameSessionScreen from '../GameSessionScreen';
@@ -15,6 +14,9 @@ jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
 jest.mock('../../components/SushiStack', () => () => null);
 jest.mock('../../components/SakuraCelebration', () => () => null);
+// Ultimo listener "beforeRemove" registrato dalla schermata (uscita con conferma)
+let mockBeforeRemove: ((event: unknown) => void) | undefined;
+const mockDispatch = jest.fn();
 jest.mock('@react-navigation/native', () => ({
   useRoute: () => ({
     params: {
@@ -27,9 +29,12 @@ jest.mock('@react-navigation/native', () => ({
     },
   }),
   useNavigation: () => ({
-    addListener: () => () => undefined,
+    addListener: (_event: string, listener: (event: unknown) => void) => {
+      mockBeforeRemove = listener;
+      return () => undefined;
+    },
     popTo: jest.fn(),
-    dispatch: jest.fn(),
+    dispatch: mockDispatch,
     navigate: jest.fn(),
   }),
 }));
@@ -116,17 +121,36 @@ describe('GameSessionScreen', () => {
     expect(await screen.findByText(/Sei offline/)).toBeTruthy();
   });
 
+  it('annulla l’ultimo pezzo con il suono "bop"', async () => {
+    const SoundManager = require('../../utils/SoundManager').default;
+    const bop = jest.spyOn(SoundManager, 'playUndoSound');
+    renderWithProviders(<GameSessionScreen />);
+    serverEmit('session', snapshot());
+
+    fireEvent.press(screen.getByLabelText('Annulla ultimo'));
+    await waitFor(() => expect(socketService.removePiece).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Ultimo pezzo annullato')).toBeTruthy();
+    expect(bop).toHaveBeenCalledTimes(1);
+  });
+
   it('chiede conferma prima di segnare la fine e poi blocca l’aggiunta di pezzi', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert');
     renderWithProviders(<GameSessionScreen />);
     serverEmit('session', snapshot());
 
     fireEvent.press(screen.getByLabelText('Ho finito!'));
+    expect(screen.getByText('Hai finito di mangiare?')).toBeTruthy();
+    expect(screen.getByText('pezzi mangiati')).toBeTruthy();
     expect(socketService.finishGame).not.toHaveBeenCalled();
 
-    const buttons = alertSpy.mock.calls[0][2]!;
+    // "Mangio ancora" chiude la conferma senza segnare la fine
+    fireEvent.press(screen.getByText('Mangio ancora'));
+    expect(socketService.finishGame).not.toHaveBeenCalled();
+
+    // La conferma si riapre al termine della dissolvenza di chiusura
+    fireEvent.press(screen.getByLabelText('Ho finito!'));
+    const confirm = await screen.findByText('Sì, ho finito!');
     await act(async () => {
-      await buttons.find((b) => b.text === 'Ho finito!')!.onPress!();
+      fireEvent.press(confirm);
     });
 
     expect(socketService.finishGame).toHaveBeenCalledTimes(1);
@@ -164,37 +188,50 @@ describe('GameSessionScreen', () => {
   });
 
   it("l'host può rimuovere un altro giocatore dopo una conferma", async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert');
     renderWithProviders(<GameSessionScreen />);
     serverEmit('session', { ...snapshot(), hostId: 'p1' });
 
     expect(screen.getByText(/tocca un giocatore per rimuoverlo/)).toBeTruthy();
     fireEvent.press(screen.getByText('Luca'));
-    const [title, , buttons] = alertSpy.mock.calls[alertSpy.mock.calls.length - 1];
-    expect(title).toBe('Rimuovere Luca?');
+    expect(screen.getByText('Rimuovere Luca?')).toBeTruthy();
     await act(async () => {
-      await buttons!.find((b) => b.text === 'Rimuovi')!.onPress!();
+      fireEvent.press(screen.getByText('Rimuovi'));
     });
     expect(socketService.kickPlayer).toHaveBeenCalledWith('p2');
+    expect(await screen.findByText('Luca è stato rimosso')).toBeTruthy();
   });
 
   it('chi non è host non può rimuovere nessuno', () => {
-    const alertSpy = jest.spyOn(Alert, 'alert');
     renderWithProviders(<GameSessionScreen />);
     serverEmit('session', { ...snapshot(), hostId: 'p2' });
 
     expect(screen.queryByText(/tocca un giocatore per rimuoverlo/)).toBeNull();
     fireEvent.press(screen.getByText('Luca'));
-    expect(alertSpy).not.toHaveBeenCalled();
+    expect(screen.queryByText(/Rimuovere/)).toBeNull();
+  });
+
+  it('chiede conferma prima di uscire dalla partita', async () => {
+    renderWithProviders(<GameSessionScreen />);
+    serverEmit('session', snapshot());
+
+    const action = { type: 'GO_BACK' };
+    const preventDefault = jest.fn();
+    act(() => mockBeforeRemove!({ preventDefault, data: { action } }));
+    expect(preventDefault).toHaveBeenCalled();
+    expect(screen.getByText('Uscire dalla partita?')).toBeTruthy();
+
+    fireEvent.press(screen.getByText('Esci dalla partita'));
+    // L'uscita avviene dopo la chiusura della finestra
+    await waitFor(() => expect(mockDispatch).toHaveBeenCalledWith(action));
   });
 
   it('se si viene rimossi avvisa e non salva la partita nello storico', async () => {
-    const alertSpy = jest.spyOn(Alert, 'alert');
     renderWithProviders(<GameSessionScreen />);
     serverEmit('session', { ...snapshot(), hostId: 'p2' });
     serverEmit('kicked', { sessionId: 'CENA' });
 
-    expect(alertSpy).toHaveBeenCalledWith('Sei stato rimosso dalla partita', expect.any(String), expect.any(Array));
+    expect(screen.getByText('Sei stato rimosso dalla partita')).toBeTruthy();
+    expect(screen.getByText('Torna alla Home')).toBeTruthy();
     await waitFor(async () => expect(await SessionStorageService.getActiveSession()).toBeNull());
     expect(await SessionStorageService.getSavedSessions()).toHaveLength(0);
   });
