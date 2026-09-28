@@ -61,11 +61,16 @@ const baseStyles = `
 
 const PACKAGE_RE = /^[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z][A-Za-z0-9_]*)+$/;
 
+const httpUrl = (value) => (typeof value === 'string' && /^https?:\/\//.test(value) ? value : null);
+
 // Link per aprire l'app: su Android un intent, che se l'app non è installata porta alla pagina di
-// download invece di mostrare un errore; altrove lo schema personalizzato
-function appLinks(sessionId, { androidPackage, storeUrl } = {}) {
+// download invece di mostrare un errore; altrove (iPhone) lo schema personalizzato
+function appLinks(sessionId, { androidPackage, storeUrl, iosStoreUrl } = {}) {
   const path = `join/${encodeURIComponent(sessionId)}`;
-  const store = typeof storeUrl === 'string' && /^https?:\/\//.test(storeUrl) ? storeUrl : null;
+  const store = httpUrl(storeUrl);
+  const iosStore = httpUrl(iosStoreUrl);
+  // ID numerico dell'app nell'App Store (https://apps.apple.com/.../id1234567890), per lo Smart App Banner
+  const iosAppId = iosStore?.match(/\/id(\d+)/)?.[1] ?? null;
   const pkg = typeof androidPackage === 'string' && PACKAGE_RE.test(androidPackage) ? androidPackage : null;
   const extras = [pkg ? `package=${pkg}` : '', store ? `S.browser_fallback_url=${encodeURIComponent(store)}` : '']
     .filter(Boolean)
@@ -78,6 +83,8 @@ function appLinks(sessionId, { androidPackage, storeUrl } = {}) {
     // Apertura automatica: senza pacchetto né fallback, se l'app manca non succede nulla
     androidAutoIntent: `intent://${path}#Intent;scheme=sushi-streak;end`,
     storeUrl: store,
+    iosStoreUrl: iosStore,
+    iosAppId,
   };
 }
 
@@ -105,6 +112,11 @@ function renderJoinPage(info, nonce = '', options = {}) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sushi Streak - Unisciti alla sessione</title>
+  ${
+    links.iosAppId
+      ? `<meta name="apple-itunes-app" content="app-id=${escapeHtml(links.iosAppId)}, app-argument=${escapeHtml(links.deepLink)}">`
+      : ''
+  }
   <style nonce="${escapeHtml(nonce)}">
     ${baseStyles}
     .session-info { background: var(--soft); border-radius: 18px; padding: 22px; margin: 24px 0; }
@@ -155,8 +167,8 @@ function renderJoinPage(info, nonce = '', options = {}) {
       <button id="copy-btn" class="btn btn-secondary" type="button">📋 Copia codice</button>
     </div>
     ${
-      links.storeUrl
-        ? `<p class="store">Non hai ancora l'app? <a href="${escapeHtml(links.storeUrl)}" rel="noopener">Scaricala qui</a></p>`
+      links.storeUrl || links.iosStoreUrl
+        ? `<p class="store" id="store-line">Non hai ancora l'app? <a id="store-link" href="${escapeHtml(links.storeUrl || links.iosStoreUrl)}" rel="noopener">Scaricala qui</a></p>`
         : ''
     }
   </div>
@@ -167,9 +179,20 @@ function renderJoinPage(info, nonce = '', options = {}) {
       var androidIntent = ${jsonForScript(links.androidIntent)};
       var androidAutoIntent = ${jsonForScript(links.androidAutoIntent)};
       var isActive = ${info.isActive ? 'true' : 'false'};
+      var iosStoreUrl = ${jsonForScript(links.iosStoreUrl)};
       var isAndroid = /Android/i.test(navigator.userAgent);
+      // Gli iPad recenti si presentano come Mac: si riconoscono dal touch
+      var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+        (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
       var openBtn = document.getElementById('open-btn');
       if (openBtn && isAndroid) openBtn.setAttribute('href', androidIntent);
+
+      // Su iPhone il link di download porta all'App Store, se l'app è pubblicata, mai a Google Play
+      var storeLine = document.getElementById('store-line');
+      if (storeLine && isIOS) {
+        if (iosStoreUrl) document.getElementById('store-link').setAttribute('href', iosStoreUrl);
+        else storeLine.parentNode.removeChild(storeLine);
+      }
 
       function fallbackCopy() {
         var textArea = document.createElement('textarea');

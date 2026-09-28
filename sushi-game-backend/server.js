@@ -44,7 +44,15 @@ const DEFAULT_CONFIG = {
     .split(',')
     .map((f) => f.trim())
     .filter(Boolean),
+  // iOS: Team ID Apple (10 caratteri) e bundle identifier per gli Universal Links
+  appleTeamId: process.env.APPLE_TEAM_ID || '',
+  iosBundleId: process.env.IOS_BUNDLE_ID || 'com.stevatero.sushistreakapp',
+  // Pagina dell'app sull'App Store (facoltativa, finché l'app iOS non è pubblicata resta vuota)
+  iosAppStoreUrl: process.env.IOS_APP_STORE_URL || '',
 };
+
+const APPLE_TEAM_ID_RE = /^[A-Z0-9]{10}$/;
+const BUNDLE_ID_RE = /^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z][A-Za-z0-9-]*)+$/;
 
 const SESSION_ID_RE = /^[A-Z0-9-]{3,20}$/;
 const MAX_PLAYER_NAME_LENGTH = 20;
@@ -465,12 +473,12 @@ function createServer(options = {}) {
         renderJoinPage(shareInfo(session), nonce, {
           androidPackage: config.androidPackage,
           storeUrl: config.appStoreUrl || `https://play.google.com/store/apps/details?id=${config.androidPackage}`,
+          iosStoreUrl: config.iosAppStoreUrl,
         })
       );
     })
   );
 
-  // Verifica degli Android App Links (attiva solo se è configurata l'impronta del certificato)
   app.get('/privacy', (req, res) => {
     res.type('html').send(
       renderPrivacyPage({
@@ -482,6 +490,7 @@ function createServer(options = {}) {
     );
   });
 
+  // Verifica degli Android App Links (attiva solo se è configurata l'impronta del certificato)
   app.get('/.well-known/assetlinks.json', (req, res) => {
     if (!config.androidCertFingerprints.length) return res.status(404).json([]);
     return res.json([
@@ -494,6 +503,22 @@ function createServer(options = {}) {
         },
       },
     ]);
+  });
+
+  // Verifica degli Universal Links iOS (attiva solo se è configurato il Team ID Apple)
+  app.get('/.well-known/apple-app-site-association', (req, res) => {
+    const valid = APPLE_TEAM_ID_RE.test(config.appleTeamId) && BUNDLE_ID_RE.test(config.iosBundleId);
+    if (!valid) return res.status(404).json({});
+    return res.json({
+      applinks: {
+        details: [
+          {
+            appIDs: [`${config.appleTeamId}.${config.iosBundleId}`],
+            components: [{ '/': '/join/*', comment: 'Inviti alle partite' }],
+          },
+        ],
+      },
+    });
   });
 
   app.use((req, res) => res.status(404).json({ error: 'Risorsa non trovata', code: 'not_found' }));

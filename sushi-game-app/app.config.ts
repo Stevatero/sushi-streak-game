@@ -7,8 +7,9 @@ import { version } from './package.json';
  * APP_VARIANT seleziona l'ambiente (impostato dai profili in eas.json):
  * - development: build di sviluppo con dev client, installabile accanto alla versione pubblicata
  * - preview:     build interna di test (APK), installabile accanto alla versione pubblicata
- * - production:  build per il Google Play Store (default se la variabile non è impostata)
+ * - production:  build per Google Play e App Store (default se la variabile non è impostata)
  *
+ * L'app è la stessa su Android e iOS: bundle identifier iOS = application ID Android.
  * La versione dell'app (versionName) viene letta da package.json, unica fonte di verità.
  * Il versionCode Android è gestito da EAS (appVersionSource "remote" + autoIncrement). Le build
  * fuori da EAS (workflow "APK Android") lo passano in ANDROID_VERSION_CODE, ricavato dalla versione.
@@ -47,9 +48,20 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   newArchEnabled: true,
   scheme: variantConfig.scheme,
   ios: {
-    supportsTablet: true,
+    // Interfaccia pensata per il telefono: su iPad l'app gira in modalità iPhone (solo verticale)
+    supportsTablet: false,
     bundleIdentifier: applicationId,
     config: { usesNonExemptEncryption: false },
+    // Universal Links (https://sushi.dietalab.net/join/...) riservati alla build di produzione: il
+    // server li conferma con /.well-known/apple-app-site-association (variabile APPLE_TEAM_ID)
+    ...(IS_PRODUCTION ? { associatedDomains: [`applinks:${PUBLIC_HOST}`] } : {}),
+    infoPlist: {
+      // Testi di sistema (es. foglio di condivisione) nella lingua del dispositivo, italiano di base
+      CFBundleDevelopmentRegion: 'it',
+      CFBundleAllowMixedLocalizations: true,
+      // I dati locali includono i token delle partite: esclusi dal backup iCloud (come su Android)
+      RCTAsyncStorageExcludeFromBackup: true,
+    },
   },
   android: {
     package: applicationId,

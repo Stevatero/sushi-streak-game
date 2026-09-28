@@ -69,6 +69,10 @@ jobs:
         run: npm run export:android
         env:
           APP_VARIANT: production
+      - name: Build bundle iOS (production)
+        run: npm run export:ios
+        env:
+          APP_VARIANT: production
       # Le vulnerabilità "high" residue riguardano solo tool di build (Metro/PostCSS) e richiedono
       # l'aggiornamento dell'SDK Expo: vedi SECURITY.md. Il controllo blocca le critiche.
       - name: Vulnerabilità dipendenze (critical)

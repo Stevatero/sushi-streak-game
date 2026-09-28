@@ -37,9 +37,9 @@ class ShareService {
         : `🍣 Unisciti alla mia partita "${sessionName}" su Sushi Streak!\n\nCodice: ${sessionId}\n🔗 ${shareLink}`;
 
     try {
+      // Il link è già nel messaggio: passarlo anche come "url" su iOS lo duplicherebbe (es. WhatsApp)
       const shareResult = await Share.share({
         message,
-        url: shareLink, // usato su iOS
         title: `🍣 Unisciti a "${sessionName}" su Sushi Streak!`,
       });
       return shareResult.action === Share.dismissedAction ? 'dismissed' : 'shared';
