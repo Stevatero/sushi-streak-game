@@ -127,8 +127,19 @@ jobs:
         run: |
           publish() {
             gh release delete "$1" --cleanup-tag --yes >/dev/null 2>&1 || true
+            # Il tag appena cancellato può non essere ancora libero: senza pausa GitHub può lasciare
+            # la nuova release in bozza, con il link di download non raggiungibile
+            sleep 5
             gh release create "$1" "$2" --target "$GITHUB_SHA" --prerelease --latest=false \
               --title "$3" --notes-file notes.md
+            for attempt in 1 2 3; do
+              [ "$(gh release view "$1" --json isDraft --jq .isDraft)" = "false" ] && return 0
+              echo "La release $1 è ancora in bozza: pubblicazione (tentativo $attempt)"
+              sleep 5
+              gh release edit "$1" --draft=false --prerelease --latest=false >/dev/null || true
+            done
+            echo "::error::La release $1 è rimasta in bozza"
+            return 1
           }
           publish "$TAG" "$NAME" "APK ${APP_VARIANT} ${VERSION} (${ABI//,/ + })"
           publish "$LATEST_TAG" "$LATEST_NAME" "APK ${APP_VARIANT} più recente (${ABI//,/ + })"
