@@ -7,14 +7,31 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 
 ## [Unreleased]
 
+### Aggiunto
+
+- Podio nella classifica finale e gestione dei pareggi: a pari punteggio si condivide la posizione e la vittoria (anche nello storico).
+- Home: pulsante "Incolla" che riconosce codici e link di invito copiati.
+- Storico: riepilogo con partite giocate, pezzi mangiati e record.
+
 ### Modificato
 
+- Nuova interfaccia grafica con un richiamo discreto allo stile giapponese: palette washi / sumi / vermiglione shu armonizzata con l'icona, tema scuro "notte" prugna, font Outfit, timbri hanko per logo e posizioni, motivo a onde seigaiha, didascalie in giapponese e pannelli a scomparsa dal basso.
+- Partita: punteggio in grande, classifica semitrasparente sopra la pila e pulsante "+1" con animazione; comandi raggiungibili con il pollice.
+- La vittoria è festeggiata con una pioggia di petali di ciliegio al posto dei fuochi d'artificio.
+- Pagina web di invito con la stessa grafica dell'app (anche in tema scuro).
 - Nuovo sistema di animazione della pila di sushi: la fisica gira sul thread UI con un motore dedicato (worklet Reanimated) al posto di Matter.js sul thread JS. La caduta resta fluida anche con decine di pezzi, la pila si assesta in modo naturale e a riposo la simulazione si ferma del tutto.
 - Rientrando in una partita già avviata i pezzi cadono uno dopo l'altro invece che tutti insieme.
 
+### Corretto
+
+- Un doppio tocco su "Crea"/"Unisciti" poteva inviare due richieste al server.
+- Il suono di vittoria veniva riprodotto anche quando si segnava solo la fine dei propri pezzi.
+- Impostazioni: la licenza indicata nei crediti ("Tutti i diritti riservati") non corrispondeva alla licenza MIT del progetto.
+- Backend: in caso di errore del database il giocatore poteva risultare "finito" in memoria ma non su disco.
+
 ### Rimosso
 
-- Dipendenza `matter-js`.
+- Dipendenze `matter-js` e `@expo-google-fonts/joti-one`.
 
 ## [1.2.0] - 2026-09-25
 

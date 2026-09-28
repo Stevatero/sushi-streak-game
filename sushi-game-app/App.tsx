@@ -4,7 +4,14 @@ import React, { useCallback, useEffect } from 'react';
 import { View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import { useFonts, JotiOne_400Regular } from '@expo-google-fonts/joti-one';
+import {
+  useFonts,
+  Outfit_400Regular,
+  Outfit_500Medium,
+  Outfit_600SemiBold,
+  Outfit_700Bold,
+  Outfit_800ExtraBold,
+} from '@expo-google-fonts/outfit';
 import { PaperProvider } from 'react-native-paper';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -22,7 +29,13 @@ SplashScreen.preventAutoHideAsync().catch(() => {
 // I deep link (sushi-streak://join/CODICE e https://.../join/CODICE) sono gestiti solo dalla HomeScreen
 const ThemedApp = () => {
   const { theme, isDarkMode, isReady } = useColorScheme();
-  const [fontsLoaded, fontError] = useFonts({ JotiOne_400Regular });
+  const [fontsLoaded, fontError] = useFonts({
+    Outfit_400Regular,
+    Outfit_500Medium,
+    Outfit_600SemiBold,
+    Outfit_700Bold,
+    Outfit_800ExtraBold,
+  });
   // Se il font non si carica si prosegue con quello di sistema
   const appReady = isReady && (fontsLoaded || !!fontError);
 
