@@ -16,21 +16,27 @@ on:
         type: choice
         options: [preview, production]
         default: preview
+      abi:
+        description: 'Architetture (solo arm64: APK più leggero, per i telefoni degli ultimi anni)'
+        type: choice
+        options: ['arm64-v8a,armeabi-v7a', 'arm64-v8a']
+        default: 'arm64-v8a,armeabi-v7a'
 
 permissions:
   contents: write
 
 concurrency:
-  group: android-apk-${{ github.ref }}-${{ inputs.variant }}
+  group: android-apk-${{ github.ref }}-${{ inputs.variant }}-${{ inputs.abi }}
   cancel-in-progress: true
 
 jobs:
   apk:
-    name: Build APK (${{ inputs.variant }})
+    name: Build APK (${{ inputs.variant }}, ${{ inputs.abi }})
     runs-on: ubuntu-latest
     timeout-minutes: 75
     env:
       APP_VARIANT: ${{ inputs.variant }}
+      ABI: ${{ inputs.abi }}
     defaults:
       run:
         working-directory: sushi-game-app
@@ -51,18 +57,19 @@ jobs:
         run: |
           export JAVA_HOME="$JAVA_HOME_17_X64"
           ./gradlew assembleRelease --no-daemon \
-            -PreactNativeArchitectures=arm64-v8a,armeabi-v7a \
+            -PreactNativeArchitectures="$ABI" \
             -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
       - name: Prepara il file
         id: apk
         run: |
           VERSION=$(node -p "require('./package.json').version")
           SHORT_SHA=$(git rev-parse --short HEAD)
-          NAME="sushi-streak-${VERSION}-${APP_VARIANT}-${SHORT_SHA}.apk"
+          SUFFIX=$([ "$ABI" = "arm64-v8a" ] && echo "-arm64" || true)
+          NAME="sushi-streak-${VERSION}-${APP_VARIANT}-${SHORT_SHA}${SUFFIX}.apk"
           cp android/app/build/outputs/apk/release/app-release.apk "$NAME"
           ls -lh "$NAME"
           echo "name=$NAME" >> "$GITHUB_OUTPUT"
-          echo "tag=apk-${APP_VARIANT}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "tag=apk-${APP_VARIANT}-${SHORT_SHA}${SUFFIX}" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@v7
         with:
@@ -82,7 +89,7 @@ jobs:
             echo
             echo "- Firmato con la chiave di debug: non aggiorna versioni installate da EAS o dal Play Store."
             echo "- La variante preview si installa accanto alla versione pubblicata."
-            echo "- Architetture: arm64-v8a, armeabi-v7a."
+            echo "- Architetture: ${ABI//,/, }."
           } > notes.md
           gh release create "$TAG" "$NAME" --target "$GITHUB_SHA" --prerelease \
-            --title "APK ${APP_VARIANT} ${VERSION} (${GITHUB_SHA::7})" --notes-file notes.md
+            --title "APK ${APP_VARIANT} ${VERSION} (${GITHUB_SHA::7}, ${ABI//,/ + })" --notes-file notes.md
