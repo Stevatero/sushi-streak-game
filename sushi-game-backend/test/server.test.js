@@ -275,7 +275,64 @@ test("la pagina di invito apre l'app con un intent Android e rimanda allo store 
 });
 
 test('i link della pagina di invito scartano pacchetti e URL non validi', () => {
-  const links = appLinks('ABC', { androidPackage: 'x;S.evil=1', storeUrl: 'javascript:alert(1)' });
+  const links = appLinks('ABC', {
+    androidPackage: 'x;S.evil=1',
+    storeUrl: 'javascript:alert(1)',
+    iosStoreUrl: 'javascript:alert(1)',
+  });
   assert.equal(links.androidIntent, 'intent://join/ABC#Intent;scheme=sushi-streak;end');
   assert.equal(links.storeUrl, null);
+  assert.equal(links.iosStoreUrl, null);
+  assert.equal(links.iosAppId, null);
+});
+
+test("senza App Store configurato la pagina di invito non mostra banner iOS né l'associazione Universal Links", async () => {
+  await post('/api/sessions', { sessionName: 'NO-IOS', playerName: 'Anna' });
+  const html = await (await fetch(`${baseUrl}/join/NO-IOS`)).text();
+  assert.ok(!html.includes('apple-itunes-app'));
+  assert.equal((await fetch(`${baseUrl}/.well-known/apple-app-site-association`)).status, 404);
+});
+
+test('con Team ID e App Store configurati supporta Universal Links e Smart App Banner su iOS', async () => {
+  const iosDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sushi-ios-'));
+  const ios = createServer({
+    dbPath: path.join(iosDir, 'test.db'),
+    appleTeamId: 'ABCDE12345',
+    iosAppStoreUrl: 'https://apps.apple.com/it/app/sushi-streak/id1234567890',
+  });
+  const iosUrl = `http://127.0.0.1:${await ios.start(0)}`;
+  try {
+    const res = await fetch(`${iosUrl}/.well-known/apple-app-site-association`);
+    assert.equal(res.status, 200);
+    assert.match(res.headers.get('content-type'), /application\/json/);
+    const [details] = (await res.json()).applinks.details;
+    assert.deepEqual(details.appIDs, ['ABCDE12345.com.stevatero.sushistreakapp']);
+    assert.equal(details.components[0]['/'], '/join/*');
+
+    await fetch(`${iosUrl}/api/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionName: 'IOS', playerName: 'Anna' }),
+    });
+    const html = await (await fetch(`${iosUrl}/join/IOS`)).text();
+    assert.ok(
+      html.includes('<meta name="apple-itunes-app" content="app-id=1234567890, app-argument=sushi-streak://join/IOS">')
+    );
+    assert.ok(html.includes('"https://apps.apple.com/it/app/sushi-streak/id1234567890"'));
+  } finally {
+    await ios.close();
+    fs.rmSync(iosDir, { recursive: true, force: true });
+  }
+});
+
+test("un Team ID Apple non valido non espone l'associazione Universal Links", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sushi-ios-'));
+  const server = createServer({ dbPath: path.join(dir, 'test.db'), appleTeamId: 'team id"' });
+  const url = `http://127.0.0.1:${await server.start(0)}`;
+  try {
+    assert.equal((await fetch(`${url}/.well-known/apple-app-site-association`)).status, 404);
+  } finally {
+    await server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

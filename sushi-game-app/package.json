@@ -49,11 +49,16 @@
     "doctor": "expo-doctor",
     "check": "npm run lint && npm run typecheck && npm run format:check && npm test",
     "export:android": "expo export --platform android --output-dir dist",
+    "export:ios": "expo export --platform ios --output-dir dist-ios",
     "build:dev": "eas build -p android --profile development",
     "build:preview": "eas build -p android --profile preview",
     "build:production": "eas build -p android --profile production",
     "build:production:apk": "eas build -p android --profile production-apk",
     "submit:production": "eas submit -p android --profile production --latest",
+    "build:ios:simulator": "eas build -p ios --profile preview-simulator",
+    "build:ios:preview": "eas build -p ios --profile preview",
+    "build:ios:production": "eas build -p ios --profile production",
+    "submit:ios:production": "eas submit -p ios --profile production --latest",
     "eas-build-pre-install": "node scripts/configure-build-variant.js"
   },
   "jest": {

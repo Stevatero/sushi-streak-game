@@ -77,8 +77,8 @@ function renderPrivacyPage({ contact, retentionDays, inactivityMinutes, nonce = 
   <h2>Dati salvati solo sul tuo dispositivo</h2>
   <p>L'app salva localmente, senza inviarli al server: il nome usato nell'ultima partita, lo storico delle
   partite (nomi dei partecipanti, punteggi, eventuale ristorante indicato da te), le preferenze di tema e audio
-  e le credenziali per riconnetterti alla partita in corso. Questi dati sono esclusi dal backup automatico di
-  Android e puoi cancellarli in qualsiasi momento da <em>Impostazioni → Cancella dati locali</em> o
+  e le credenziali per riconnetterti alla partita in corso. Questi dati sono esclusi dal backup automatico
+  (Android e iCloud) e puoi cancellarli in qualsiasi momento da <em>Impostazioni → Cancella dati locali</em> o
   disinstallando l'app.</p>
 
   <h2>Sicurezza</h2>
