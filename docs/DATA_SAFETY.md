@@ -1,6 +1,6 @@
-# Privacy e questionario "Sicurezza dei dati" (Google Play)
+# Privacy: "Sicurezza dei dati" (Google Play) e "Privacy dell'app" (App Store)
 
-Questo documento descrive i dati trattati da Sushi Streak **così come risultano dal codice** (versione 1.2.0) e propone le risposte per il questionario _Data safety_ della Play Console.
+Questo documento descrive i dati trattati da Sushi Streak **così come risultano dal codice** (versione 1.4.0, uguale su Android e iOS) e propone le risposte per il questionario _Data safety_ della Play Console e per la sezione _App Privacy_ di App Store Connect.
 Va riverificato a ogni release che introduca nuovi dati, SDK o servizi esterni.
 
 > Questo documento non è una consulenza legale e non attesta la conformità al GDPR: serve come base tecnica verificata per compilare il questionario e l'informativa. Le valutazioni legali restano a carico del titolare.
@@ -17,7 +17,7 @@ Va riverificato a ogni release che introduca nuovi dati, SDK o servizi esterni.
 | ID giocatore (UUID casuale) + hash del token | Generati dal server  | Riconnessione e autorizzazione            | Nessuno (il token resta sul dispositivo)                                 | Come sopra                                  |
 | Indirizzo IP                                 | Connessione          | Trasmissione, limitazione delle richieste | Nessuno                                                                  | Transitorio; può comparire nei log di nginx |
 
-### Salvati solo sul dispositivo (AsyncStorage, esclusi dal backup Android)
+### Salvati solo sul dispositivo (AsyncStorage, esclusi dal backup Android e iCloud)
 
 - Ultimo nickname usato
 - Storico delle partite (nomi dei partecipanti, punteggi, ristorante facoltativo)
@@ -57,9 +57,24 @@ Note:
 - L'indirizzo IP trattato solo per la connessione e la sicurezza, secondo le linee guida Google, di norma non va dichiarato come dato raccolto se non viene conservato per altre finalità. Se i log di nginx vengono conservati a lungo, valuta di dichiarare "Altri ID" anche per questo scopo o di ridurre la conservazione dei log.
 - I dati salvati solo sul dispositivo e mai trasmessi non vanno dichiarati come "raccolti".
 
+## App Store Connect: Privacy dell'app
+
+Stesso inventario, con le categorie Apple. L'app non effettua tracciamento (nessun dato combinato con dati di terzi né condiviso con data broker): non serve la richiesta di App Tracking Transparency.
+
+| Categoria Apple          | Tipo                           | Raccolto | Collegato all'identità | Tracciamento | Finalità              |
+| ------------------------ | ------------------------------ | -------- | ---------------------- | ------------ | --------------------- |
+| Informazioni di contatto | **Nome** (nickname)            | Sì       | No                     | No           | Funzionalità dell'app |
+| Contenuti utente         | **Contenuti di gioco** (punti) | Sì       | No                     | No           | Funzionalità dell'app |
+| Identificatori           | **ID utente** (ID giocatore)   | Sì       | No                     | No           | Funzionalità dell'app |
+
+Note:
+
+- "Collegato all'identità: No" perché non esistono account e l'ID giocatore è casuale e valido per una sola partita. Se si aggiungono account o identificativi del dispositivo la risposta diventa "Sì".
+- Il manifesto privacy richiesto da Apple (`PrivacyInfo.xcprivacy`, API "required reason" di React Native ed Expo) viene generato da `expo prebuild`.
+
 ## Informativa sulla privacy
 
-URL da indicare nella Play Console: **https://sushi.dietalab.net/privacy** (generata da `sushi-game-backend/privacyPage.js`).
+URL da indicare nella Play Console e in App Store Connect: **https://sushi.dietalab.net/privacy** (generata da `sushi-game-backend/privacyPage.js`).
 È raggiungibile anche dall'app: Impostazioni → Privacy → _Informativa sulla privacy_.
 
 Prima della pubblicazione impostare `PRIVACY_CONTACT` sul backend con un indirizzo email di contatto valido.

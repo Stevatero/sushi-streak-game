@@ -3,7 +3,7 @@
 Il backend è un singolo processo Node.js (Express + Socket.IO + SQLite) gestito da PM2 dietro un reverse proxy nginx con HTTPS.
 
 ```
-App Android ──HTTPS/WSS──▶ nginx (443, TLS) ──HTTP──▶ Node :3005 (solo localhost) ──▶ SQLite
+App Android/iOS ──HTTPS/WSS──▶ nginx (443, TLS) ──HTTP──▶ Node :3005 (solo localhost) ──▶ SQLite
 ```
 
 > Lo stato delle partite attive è anche in memoria: eseguire **una sola istanza** del processo.
@@ -28,7 +28,7 @@ npm run restart           # aggiornamenti successivi
 pm2 save
 ```
 
-Le migrazioni del database vengono applicate automaticamente all'avvio (es. la 1.3.0 aggiunge la colonna `sessions.host_id`; per le partite già esistenti l'host è il primo giocatore entrato). Aggiorna il backend **prima** di distribuire una nuova versione dell'app che ne usa le funzioni: l'app 1.3.0 funziona anche con il backend 1.2.0, ma la rimozione dei giocatori richiede il backend 1.3.0.
+Le migrazioni del database vengono applicate automaticamente all'avvio (es. la 1.3.0 aggiunge la colonna `sessions.host_id`; per le partite già esistenti l'host è il primo giocatore entrato). Aggiorna il backend **prima** di distribuire una nuova versione dell'app che ne usa le funzioni: l'app 1.3.0 funziona anche con il backend 1.2.0, ma la rimozione dei giocatori richiede il backend 1.3.0. Il backend 1.4.0 non cambia il protocollo né il database: aggiunge il supporto agli Universal Links iOS e ai link all'App Store nella pagina di invito.
 
 ### Variabili d'ambiente
 
@@ -37,6 +37,8 @@ Vedi [`sushi-game-backend/.env.example`](../sushi-game-backend/.env.example). In
 - `PRIVACY_CONTACT`: email o URL mostrati nella pagina `/privacy`
 - `ANDROID_CERT_SHA256`: impronta del certificato di firma Play, per gli App Links
 - `APP_STORE_URL` (facoltativa): pagina di download usata dalla pagina di invito se l'app non è installata (default: scheda Google Play)
+- `APPLE_TEAM_ID` (per iOS): Team ID Apple, abilita `/.well-known/apple-app-site-association` per gli Universal Links
+- `IOS_APP_STORE_URL` (facoltativa, dopo la pubblicazione su App Store): link di download su iPhone e Smart App Banner nella pagina di invito
 - `DB_PATH`: percorso del database fuori dalla cartella del codice (es. `/var/lib/sushi-streak/sushi_game.db`)
 
 Le variabili possono essere aggiunte nella sezione `env_production` di `ecosystem.config.js` **sul server** (senza committare valori sensibili) o esportate nell'ambiente del processo PM2.

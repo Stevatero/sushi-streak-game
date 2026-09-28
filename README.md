@@ -6,15 +6,16 @@
 
 <p align="center">
   <strong>Chi mangia più sushi? Sfida i tuoi amici all'ultimo nigiri.</strong><br>
-  L'app Android per contare in tempo reale i pezzi mangiati durante una cena all-you-can-eat,<br>
+  L'app per Android e iOS che conta in tempo reale i pezzi mangiati durante una cena all-you-can-eat,<br>
   con classifica condivisa, una pila di sushi che cresce a ogni pezzo e un tocco di stile giapponese.
 </p>
 
 <p align="center">
   <a href="https://github.com/Stevatero/sushi-streak-game/actions/workflows/ci.yml"><img src="https://github.com/Stevatero/sushi-streak-game/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versione-1.3.0-C94330" alt="Versione 1.3.0"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versione-1.4.0-C94330" alt="Versione 1.4.0"></a>
   <img src="https://img.shields.io/badge/Expo_SDK-54-000020?logo=expo" alt="Expo SDK 54">
   <img src="https://img.shields.io/badge/Android-API_24%E2%80%9336-3DDC84?logo=android&logoColor=white" alt="Android API 24-36">
+  <img src="https://img.shields.io/badge/iOS-15.1%2B-000000?logo=apple&logoColor=white" alt="iOS 15.1+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
 </p>
 
@@ -44,7 +45,7 @@
 
 ## Scarica l'app
 
-L'app non è ancora sul Google Play Store. Per provarla c'è l'**APK di test** (variante _preview_, si installa accanto a un'eventuale versione del Play Store come "Sushi Streak (Preview)"):
+L'app non è ancora su Google Play né sull'App Store. Su Android per provarla c'è l'**APK di test** (variante _preview_, si installa accanto a un'eventuale versione del Play Store come "Sushi Streak (Preview)"):
 
 | APK                                    | Per chi                              | Link fisso all'ultima build                                                                                                                                |
 | -------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -62,16 +63,19 @@ Le build per versione sono nelle [release](https://github.com/Stevatero/sushi-st
 
 > L'APK di test è firmato con una chiave di debug: va bene per provare l'app, ma non aggiorna una versione installata dal Play Store. Una nuova build della stessa variante si installa invece come aggiornamento della precedente.
 
+**iPhone**: l'app è pronta per iOS (stesso codice e stesse funzioni) e si compila con EAS; per installarla su un iPhone serve un account Apple Developer (vedi [docs/RELEASING.md](docs/RELEASING.md#ios-app-store)).
+
 ## Funzionalità
 
 **Partite multigiocatore in tempo reale**
 
 - Crea una partita con un codice (generato o personalizzato) e invita gli amici con codice o link (`https://sushi.dietalab.net/join/CODICE`); il pulsante **Incolla** riconosce anche un link di invito copiato.
 - Classifica condivisa aggiornata in tempo reale via WebSocket, con la tua posizione e il tuo punteggio in grande.
-- **+1** per ogni pezzo mangiato, con suono, animazione e una pila di sushi che cade e si accumula con una fisica simulata sul thread UI: fluida anche con decine di pezzi. **Annulla** corregge un tocco accidentale.
+- **+1** per ogni pezzo mangiato, con suono, animazione e una pila di sushi che cade e si accumula con una fisica simulata sul thread UI: fluida anche con decine di pezzi. **Annulla** corregge un tocco accidentale: l'ultimo pezzo svanisce dalla pila con un "bop".
 - Chi crea la partita (👑) può rimuovere un giocatore toccandolo in classifica, per esempio chi è entrato indovinando il codice.
-- **Ho finito** (con conferma): la partita termina quando tutti hanno finito, con podio, classifica finale, pareggi gestiti e una pioggia di petali di ciliegio per chi vince.
-- Pagina web di invito con la stessa grafica dell'app, che apre l'app o porta allo store se non è installata.
+- **Ho finito** (con una conferma che riepiloga pezzi e posizione): la partita termina quando tutti hanno finito, con podio, classifica finale, pareggi gestiti e una pioggia di petali di ciliegio per chi vince.
+- Pagina web di invito con la stessa grafica dell'app, che apre l'app o porta allo store se non è installata (Google Play su Android, App Store su iPhone quando sarà pubblicata).
+- Conferme e avvisi in pannelli nello stile dell'app, uguali su Android e iOS.
 
 **Affidabilità**
 
@@ -106,17 +110,18 @@ Un'interfaccia fresca e moderna con un richiamo discreto al Giappone:
 - **Timbri _hanko_** per il logo, le posizioni in classifica (oro, argento, bronzo) e la vittoria; motivo a onde **_seigaiha_** sullo sfondo; petali di ciliegio (_sakura fubuki_) per festeggiare.
 - **Tipografia** con il font [Outfit](https://fonts.google.com/specimen/Outfit) e piccole didascalie in giapponese:
 
-| Parola       | Lettura     | Dove                    | Significato                              |
-| ------------ | ----------- | ----------------------- | ---------------------------------------- |
-| 寿司         | sushi       | logo                    | sushi                                    |
-| 貫           | kan         | punteggio, pulsante +1  | unità con cui si contano i pezzi         |
-| いただきます | itadakimasu | Crea partita            | "buon appetito", detto prima di mangiare |
-| ごちそうさま | gochisōsama | fine dei propri pezzi   | "grazie per il pasto", detto alla fine   |
-| 順位         | jun'i       | classifica              | posizione                                |
-| 勝           | shō / kachi | vincitore               | vittoria                                 |
-| 完           | kan         | giocatore che ha finito | completato                               |
+| Parola       | Lettura         | Dove                    | Significato                              |
+| ------------ | --------------- | ----------------------- | ---------------------------------------- |
+| 寿司         | sushi           | logo                    | sushi                                    |
+| 貫           | kan             | punteggio, pulsante +1  | unità con cui si contano i pezzi         |
+| いただきます | itadakimasu     | Crea partita            | "buon appetito", detto prima di mangiare |
+| ごちそうさま | gochisōsama     | fine dei propri pezzi   | "grazie per il pasto", detto alla fine   |
+| 順位         | jun'i           | classifica              | posizione                                |
+| 勝           | shō / kachi     | vincitore               | vittoria                                 |
+| 完           | kan             | giocatore che ha finito | completato                               |
+| 帰 / またね  | kaeru / mata ne | uscita dalla partita    | "tornare" / "a presto"                   |
 
-Il design system è in `sushi-game-app/src/theme/theme.ts` (palette, tipografia, temi Material 3) e `src/components/ui/` (pulsanti, pannelli, campi, pannelli dal basso, timbri, motivo a onde).
+Il design system è in `sushi-game-app/src/theme/theme.ts` (palette, tipografia, temi Material 3) e `src/components/ui/` (pulsanti, pannelli, campi, pannelli dal basso, conferme, timbri, motivo a onde).
 
 ## Stack tecnologico
 
@@ -158,7 +163,7 @@ Il design system è in `sushi-game-app/src/theme/theme.ts` (palette, tipografia,
 
 ```
 sushi-streak-game/
-├── sushi-game-app/              App Expo (Android)
+├── sushi-game-app/              App Expo (Android e iOS)
 │   ├── App.tsx                  Provider, font, error boundary, splash
 │   ├── app.config.ts            Configurazione Expo per ambiente (APP_VARIANT) e versione
 │   ├── eas.json                 Profili di build EAS
@@ -167,7 +172,8 @@ sushi-streak-game/
 │   └── src/
 │       ├── components/          SushiStack, SakuraCelebration, ErrorBoundary
 │       │   ├── sushiStack/      Motore fisico (worklet) e forme dei pezzi
-│       │   └── ui/              Design system: AppButton, Panel, Field, Sheet, Hanko, Seigaiha…
+│       │   └── ui/              Design system: AppButton, Panel, Field, Sheet, ConfirmSheet, Hanko, Seigaiha…
+│       ├── hooks/               useExclusiveModal (una finestra alla volta)
 │       ├── navigation/          Stack e tipi delle rotte
 │       ├── screens/             Home, GameSession, SessionHistory, Settings
 │       ├── services/            api, socketService, sessionStorage, preferences, shareService
@@ -190,7 +196,7 @@ sushi-streak-game/
 
 ## Sviluppo locale
 
-Requisiti: Node.js **22 LTS** (minimo 20.19 per l'app, 20.17 per il backend) e npm; per provare l'app un dispositivo o emulatore Android con la build di sviluppo; per le build un account [Expo](https://expo.dev) con accesso al progetto EAS, oppure Android Studio (JDK 17+ e Android SDK 36) per le build locali.
+Requisiti: Node.js **22 LTS** (minimo 20.19 per l'app, 20.17 per il backend) e npm; per provare l'app un dispositivo o emulatore Android (o un iPhone / Simulatore iOS) con la build di sviluppo; per le build un account [Expo](https://expo.dev) con accesso al progetto EAS, oppure Android Studio (JDK 17+ e Android SDK 36) per le build Android locali. Per le build iOS non serve un Mac (le compila EAS), ma serve un account Apple Developer.
 
 ```bash
 git clone https://github.com/Stevatero/sushi-streak-game.git
@@ -238,6 +244,9 @@ L'app usa il dev client di Expo: installa sul dispositivo una build `development
 | `PRIVACY_CONTACT`        | issue GitHub                          | Contatto mostrato in `/privacy`                                  |
 | `ANDROID_CERT_SHA256`    | —                                     | Impronte del certificato Play per gli App Links                  |
 | `APP_STORE_URL`          | scheda Google Play del pacchetto      | Download dell'app dalla pagina di invito se non è installata     |
+| `APPLE_TEAM_ID`          | —                                     | Team ID Apple per gli Universal Links iOS                        |
+| `IOS_BUNDLE_ID`          | `com.stevatero.sushistreakapp`        | Bundle ID iOS per gli Universal Links                            |
+| `IOS_APP_STORE_URL`      | —                                     | Pagina App Store: download su iPhone e Smart App Banner          |
 
 Nessun secret è necessario per sviluppare: le credenziali di firma e pubblicazione sono gestite da EAS e GitHub Secrets.
 
@@ -256,12 +265,12 @@ npm run lint && npm run format:check && npm test
 
 I test coprono le parti a maggior rischio di regressione:
 
-- **App**: motore fisico della pila (stabilità, pezzi sospesi, bordi, tempi di assestamento) e sincronizzazione tra punteggio e pezzi; validazione dei codici e deep link; client API; riconnessione e rejoin del socket; store di gioco; storage con dati corrotti o legacy; error boundary; flussi Home (creazione, ingresso, doppio tocco, incolla) e Partita (pezzi online/offline, conferma di fine, pareggi, rimozione dei giocatori, salvataggio automatico); versionCode.
-- **Backend**: autenticazione con token, robustezza agli eventi malformati, tocchi concorrenti senza perdite, rimozione dei giocatori e permessi dell'host, fine partita, ricarica dopo riavvio, XSS e CSP delle pagine web, link della pagina di invito, health check, backup.
+- **App**: motore fisico della pila (stabilità, pezzi sospesi, bordi, tempi di assestamento) e sincronizzazione tra punteggio e pezzi; validazione dei codici e deep link; client API; riconnessione e rejoin del socket; store di gioco; storage con dati corrotti o legacy; error boundary; flussi Home (creazione, ingresso, doppio tocco, incolla) e Partita (pezzi online/offline, annullamento con suono, conferme di fine e di uscita, pareggi, rimozione dei giocatori, salvataggio automatico); pannello di conferma e apertura delle finestre una alla volta; versionCode.
+- **Backend**: autenticazione con token, robustezza agli eventi malformati, tocchi concorrenti senza perdite, rimozione dei giocatori e permessi dell'host, fine partita, ricarica dopo riavvio, XSS e CSP delle pagine web, link della pagina di invito (Android e iOS), Universal Links, health check, backup.
 
 ## Versioni, build e rilasci
 
-La versione segue [SemVer](https://semver.org/lang/it/) ed è unica per tutto il progetto: `sushi-game-app/package.json` (= `versionName` Android e versione mostrata nelle Impostazioni) e `sushi-game-backend/package.json` (mostrata da `/api/health`). **Ogni modifica che viene compilata aggiorna la versione** (PATCH per correzioni, MINOR per nuove funzionalità, MAJOR per cambi incompatibili del protocollo) e porta le voci di `Unreleased` nella nuova sezione del [CHANGELOG](CHANGELOG.md).
+La versione segue [SemVer](https://semver.org/lang/it/) ed è unica per tutto il progetto: `sushi-game-app/package.json` (= `versionName` Android, versione iOS e versione mostrata nelle Impostazioni) e `sushi-game-backend/package.json` (mostrata da `/api/health`). **Ogni modifica che viene compilata aggiorna la versione** (PATCH per correzioni, MINOR per nuove funzionalità, MAJOR per cambi incompatibili del protocollo) e porta le voci di `Unreleased` nella nuova sezione del [CHANGELOG](CHANGELOG.md).
 
 | Come                                     | Risultato                                                                               |
 | ---------------------------------------- | --------------------------------------------------------------------------------------- |
@@ -270,22 +279,27 @@ La versione segue [SemVer](https://semver.org/lang/it/) ed è unica per tutto il
 | `npm run build:preview`                  | APK interno di test su EAS (`com.stevatero.sushistreakapp.preview`)                     |
 | `npm run build:production`               | **AAB** firmato per il Play Store (`versionCode` incrementato da EAS)                   |
 | `npm run submit:production`              | Invio dell'ultimo AAB alla traccia interna di Google Play                               |
+| `npm run build:ios:simulator`            | App per il Simulatore iOS (non serve un account Apple)                                  |
+| `npm run build:ios:preview`              | Build iOS ad hoc per gli iPhone registrati (`eas device:create`)                        |
+| `npm run build:ios:production`           | Build iOS per App Store / TestFlight                                                    |
+| `npm run submit:ios:production`          | Invio dell'ultima build iOS ad App Store Connect (TestFlight)                           |
 | Tag `vX.Y.Z`                             | GitHub Release con le note del CHANGELOG e, con `EXPO_TOKEN`, build AAB su EAS          |
 
 Il workflow APK si ferma se la versione è già stata compilata da un altro commit, così ogni APK corrisponde a una versione diversa.
 
 Configurazione Android: `targetSdk`/`compileSdk` 36, `minSdk` 24, R8 e riduzione delle risorse, backup disabilitato, permessi minimi, App Links verificati su `sushi.dietalab.net/join`.
+Configurazione iOS: iOS 15.1+, solo iPhone (su iPad in modalità iPhone), nessun permesso richiesto, dati locali esclusi dal backup iCloud, Universal Links su `sushi.dietalab.net/join`.
 
-Procedura completa e checklist Play Store: **[docs/RELEASING.md](docs/RELEASING.md)**. Deploy del backend, monitoraggio e backup: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
+Procedura completa e checklist Play Store e App Store: **[docs/RELEASING.md](docs/RELEASING.md)**. Deploy del backend, monitoraggio e backup: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
 
 ## CI/CD
 
-| Workflow                                         | Quando                       | Cosa fa                                                                                                                                                                                         |
-| ------------------------------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [CI](.github/workflows/ci.yml)                   | Push su `main`, pull request | Backend (Node 20 e 22): lint, formattazione, test, audit. App: lint, typecheck, formattazione, test con coverage, expo-doctor, build del bundle Android, audit. Scansione secrets con gitleaks. |
-| [Release](.github/workflows/release.yml)         | Tag `vX.Y.Z`                 | Verifica versione e CHANGELOG, crea la GitHub Release e, con `EXPO_TOKEN` configurato, avvia la build AAB su EAS (submit opzionale).                                                            |
-| [APK Android](.github/workflows/android-apk.yml) | Manuale (Run workflow)       | Compila un APK di test (`preview` o `production`, completo o solo arm64) senza EAS e lo pubblica nelle pre-release `apk-<variante>-vX.Y.Z` e `apk-<variante>-latest`.                           |
-| [Dependabot](.github/dependabot.yml)             | Settimanale                  | Aggiornamenti raggruppati di dipendenze e GitHub Actions (Expo/React Native esclusi: si aggiornano con l'SDK).                                                                                  |
+| Workflow                                         | Quando                       | Cosa fa                                                                                                                                                                                               |
+| ------------------------------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [CI](.github/workflows/ci.yml)                   | Push su `main`, pull request | Backend (Node 20 e 22): lint, formattazione, test, audit. App: lint, typecheck, formattazione, test con coverage, expo-doctor, build dei bundle Android e iOS, audit. Scansione secrets con gitleaks. |
+| [Release](.github/workflows/release.yml)         | Tag `vX.Y.Z`                 | Verifica versione e CHANGELOG, crea la GitHub Release e, con `EXPO_TOKEN` configurato, avvia la build AAB su EAS (submit opzionale).                                                                  |
+| [APK Android](.github/workflows/android-apk.yml) | Manuale (Run workflow)       | Compila un APK di test (`preview` o `production`, completo o solo arm64) senza EAS e lo pubblica nelle pre-release `apk-<variante>-vX.Y.Z` e `apk-<variante>-latest`.                                 |
+| [Dependabot](.github/dependabot.yml)             | Settimanale                  | Aggiornamenti raggruppati di dipendenze e GitHub Actions (Expo/React Native esclusi: si aggiornano con l'SDK).                                                                                        |
 
 ## Sicurezza e privacy
 
@@ -304,7 +318,8 @@ Procedura completa e checklist Play Store: **[docs/RELEASING.md](docs/RELEASING.
 - [ ] Aggiornamento a Expo SDK 57 (risolve gli advisory residui delle dipendenze di build)
 - [ ] Crash reporting opt-in (es. Sentry) tramite l'hook già presente in `src/utils/logger.ts`
 - [ ] Localizzazione in inglese
-- [ ] Supporto iOS (configurazione già presente, non ancora testata né pubblicata)
+- [x] Supporto iOS nel codice e nella configurazione (build EAS, Universal Links, pagina di invito)
+- [ ] Prima pubblicazione sull'App Store (serve l'account Apple Developer)
 
 ## Licenza e crediti
 

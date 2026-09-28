@@ -6,8 +6,8 @@ Riceve correzioni di sicurezza solo l'ultima versione pubblicata dell'app e il b
 
 | Versione | Supportata |
 | -------- | ---------- |
-| 1.3.x    | ✅         |
-| < 1.3    | ❌         |
+| 1.4.x    | ✅         |
+| < 1.4    | ❌         |
 
 ## Segnalare una vulnerabilità
 
@@ -17,7 +17,7 @@ Usa la segnalazione privata di GitHub: [Security → Report a vulnerability](htt
 
 Indica, se possibile:
 
-- componente coinvolto (app Android, backend, pagina web di invito);
+- componente coinvolto (app Android/iOS, backend, pagina web di invito);
 - passi per riprodurre il problema e impatto stimato;
 - versione dell'app (Impostazioni → Crediti).
 
@@ -28,7 +28,7 @@ Riceverai una prima risposta entro 7 giorni. Le vulnerabilità confermate vengon
 - Comunicazione app ↔ server solo via HTTPS/WSS; traffico in chiaro disabilitato nelle build di rilascio.
 - Ogni giocatore riceve un token casuale; sul server se ne conserva solo l'hash SHA-256 e il confronto è a tempo costante.
 - Validazione di tutti gli input REST e Socket.IO, limitazione delle richieste, header di sicurezza (Helmet) e Content Security Policy con nonce sulle pagine web.
-- Backup Android disabilitato (`allowBackup: false`) per non esportare i token locali.
+- Backup Android disabilitato (`allowBackup: false`) e dati locali esclusi dal backup iCloud (`RCTAsyncStorageExcludeFromBackup`) per non esportare i token locali.
 - Nessun secret nel repository: le credenziali (EAS, Google Play) sono gestite tramite GitHub Secrets ed EAS.
 - CI con audit delle dipendenze, scansione dei secrets (gitleaks) e Dependabot.
 
