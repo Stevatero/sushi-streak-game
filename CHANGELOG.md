@@ -15,7 +15,7 @@ Aggiornamento a Expo SDK 57.
 
 ### Modificato
 
-- Expo SDK 57 (da 54): React Native 0.86, React 19.2, Reanimated 4.5 e Worklets 0.10, TypeScript 6. Risolti gli advisory di sicurezza di gravità alta delle dipendenze di build (Metro, PostCSS).
+- Expo SDK 57 (da 54): React Native 0.86, React 19.2, Reanimated 4.5 e Worklets 0.10, TypeScript 6. Risolti tutti gli advisory di sicurezza delle dipendenze (PostCSS, image-size, uuid): `npm audit` non riporta vulnerabilità.
 - iOS: versione minima 16.4 (da 15.1), richiesta dall'SDK; ciclo di vita a scene di UIKit, necessario per le app compilate con l'SDK di iOS 27.
 - Android invariato: API 24–36.
 

@@ -84,7 +84,7 @@ jobs:
           grep -ho "IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*" ios/*.xcodeproj/project.pbxproj | sort -u
         env:
           APP_VARIANT: production
-      # Con Expo SDK 57 restano solo advisory moderati in tool di build (vedi SECURITY.md)
+      # Con Expo SDK 57 non ci sono vulnerabilità note (vedi SECURITY.md)
       - name: Vulnerabilità dipendenze (high)
         run: npm audit --omit=dev --audit-level=high
       - name: Coverage
