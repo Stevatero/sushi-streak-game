@@ -1,4 +1,6 @@
 // Configurazione PM2. Uso: npm run prod
+// Le altre variabili (PRIVACY_CONTACT, ANDROID_CERT_SHA256, APPLE_TEAM_ID…) vanno in .env, non qui:
+// questo file è versionato e una modifica sul server bloccherebbe git pull (vedi docs/DEPLOYMENT.md).
 module.exports = {
   apps: [
     {
