@@ -70,7 +70,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       backgroundImage: './assets/adaptive-icon-background.png',
       backgroundColor: BRAND_COLOR,
     },
-    predictiveBackGestureEnabled: false,
+    // Indietro predittivo (OnBackInvokedCallback): con targetSdk 36 e l'opt-out, su Android 16 il tasto
+    // indietro con la tastiera aperta chiudeva l'app invece della tastiera
+    predictiveBackGestureEnabled: true,
     // I dati locali includono i token delle partite: niente backup cloud o trasferimento dispositivo
     allowBackup: false,
     permissions: ['android.permission.INTERNET', 'android.permission.ACCESS_NETWORK_STATE'],
