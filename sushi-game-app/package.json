@@ -1,6 +1,6 @@
 {
   "name": "sushi-streak-app",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "private": true,
   "description": "App Android per sfidare gli amici a chi mangia più sushi all-you-can-eat: classifica in tempo reale, pila di sushi animata con fisica sul thread UI e interfaccia in stile giapponese.",
   "main": "index.ts",
@@ -50,6 +50,7 @@
     "check": "npm run lint && npm run typecheck && npm run format:check && npm test",
     "export:android": "expo export --platform android --output-dir dist",
     "export:ios": "expo export --platform ios --output-dir dist-ios",
+    "icons": "npx --yes --package=sharp@0.34 -- node scripts/generate-icons.js",
     "build:dev": "eas build -p android --profile development",
     "build:preview": "eas build -p android --profile preview",
     "build:production": "eas build -p android --profile production",
