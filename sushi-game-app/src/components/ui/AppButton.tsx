@@ -58,10 +58,10 @@ const AppButton: React.FC<AppButtonProps> = ({
       onPress={onPress}
       disabled={inactive}
       onPressIn={() => {
-        scale.value = withSpring(0.96, { damping: 20, stiffness: 400 });
+        scale.set(withSpring(0.96, { damping: 20, stiffness: 400 }));
       }}
       onPressOut={() => {
-        scale.value = withSpring(1, { damping: 14, stiffness: 300 });
+        scale.set(withSpring(1, { damping: 14, stiffness: 300 }));
       }}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}

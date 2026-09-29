@@ -30,10 +30,6 @@ const SessionHistoryScreen = () => {
   const [snackbar, setSnackbar] = useState('');
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    loadSavedSessions();
-  }, []);
-
   const loadSavedSessions = async () => {
     try {
       const sessions = await SessionStorageService.getSavedSessions();
@@ -44,6 +40,12 @@ const SessionHistoryScreen = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // Caricamento asincrono dallo storage: gli stati si aggiornano solo dopo la lettura
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadSavedSessions();
+  }, []);
 
   const deleteSession = (session: SavedSession) => {
     setDialog({
@@ -261,7 +263,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyPattern: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   emptyTitle: {
     marginTop: 20,

@@ -2,7 +2,9 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
-    "typeRoots": ["./node_modules/@types"]
+    "typeRoots": ["./node_modules/@types"],
+    // TypeScript 6 non include più tutti i pacchetti @types: servono i tipi globali di Jest e Node
+    "types": ["jest", "node"]
   },
   "include": ["**/*.ts", "**/*.tsx"]
 }

@@ -1,4 +1,4 @@
-import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import 'react-native-reanimated';
 import React, { useCallback, useEffect } from 'react';
 import { View } from 'react-native';
@@ -13,7 +13,6 @@ import {
   Outfit_800ExtraBold,
 } from '@expo-google-fonts/outfit';
 import { PaperProvider } from 'react-native-paper';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import ErrorBoundary from './src/components/ErrorBoundary';

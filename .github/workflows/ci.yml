@@ -73,10 +73,20 @@ jobs:
         run: npm run export:ios
         env:
           APP_VARIANT: production
-      # Le vulnerabilità "high" residue riguardano solo tool di build (Metro/PostCSS) e richiedono
-      # l'aggiornamento dell'SDK Expo: vedi SECURITY.md. Il controllo blocca le critiche.
-      - name: Vulnerabilità dipendenze (critical)
-        run: npm audit --omit=dev --audit-level=critical
+      # Progetto nativo iOS generato su Linux (non serve un Mac): la build di produzione deve avere il
+      # ciclo di vita a scene (richiesto dall'SDK di iOS 27) e gli Universal Links
+      - name: Progetto nativo iOS (prebuild)
+        run: |
+          npx expo prebuild --platform ios --no-install
+          PLIST=$(ls ios/*/Info.plist | head -1)
+          grep -q UIApplicationSceneManifest "$PLIST" || { echo "::error::Manca UIApplicationSceneManifest in $PLIST"; exit 1; }
+          grep -q "applinks:sushi.dietalab.net" ios/*/*.entitlements || { echo "::error::Mancano gli Universal Links"; exit 1; }
+          grep -ho "IPHONEOS_DEPLOYMENT_TARGET = [0-9.]*" ios/*.xcodeproj/project.pbxproj | sort -u
+        env:
+          APP_VARIANT: production
+      # Con Expo SDK 57 restano solo advisory moderati in tool di build (vedi SECURITY.md)
+      - name: Vulnerabilità dipendenze (high)
+        run: npm audit --omit=dev --audit-level=high
       - name: Coverage
         if: always()
         uses: actions/upload-artifact@v7

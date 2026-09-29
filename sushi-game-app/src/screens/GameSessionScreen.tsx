@@ -81,12 +81,14 @@ const GameSessionScreen = () => {
     'leaderboard' | 'restaurant' | 'share' | 'confirm'
   >();
   const [dialog, setDialog] = useState<ConfirmOptions | null>(null);
-  const [showCelebration, setShowCelebration] = useState(false);
+  const [celebrationDone, setCelebrationDone] = useState(false);
   const [finishRequested, setFinishRequested] = useState(false);
   const [restaurantName, setRestaurantName] = useState('');
   const [snackbar, setSnackbar] = useState('');
 
-  const startedAtRef = useRef<string>(new Date().toISOString());
+  // Inizio della partita: il ref serve ai callback, lo stato alla visualizzazione
+  const [startedAt, setStartedAt] = useState(() => new Date().toISOString());
+  const startedAtRef = useRef(startedAt);
   const restaurantRef = useRef('');
   const allowExitRef = useRef(false);
   const endHandledRef = useRef(false);
@@ -114,6 +116,8 @@ const GameSessionScreen = () => {
   // Solo con un server che indica l'host (1.3+) si possono rimuovere i giocatori
   const amHost = !!hostId && hostId === playerId;
   const canShare = status === 'active' && !gameEnded;
+  // Petali di ciliegio per chi vince, per qualche secondo dopo la fine della partita
+  const showCelebration = gameEnded && endReason === 'ended' && iWon && !celebrationDone;
 
   // Avvio o ripresa della partita: il socket si (ri)collega con le credenziali del giocatore
   useEffect(() => {
@@ -124,6 +128,7 @@ const GameSessionScreen = () => {
       // In caso di riconnessione si conserva l'orario di inizio originale
       if (saved?.sessionId === sessionId && saved.playerId === playerId && saved.startedAt) {
         startedAtRef.current = saved.startedAt;
+        setStartedAt(saved.startedAt);
       }
       await SessionStorageService.saveActiveSession({
         sessionId,
@@ -142,7 +147,7 @@ const GameSessionScreen = () => {
 
   useEffect(() => {
     if (!showCelebration) return;
-    const timer = setTimeout(() => setShowCelebration(false), CELEBRATION_DURATION_MS);
+    const timer = setTimeout(() => setCelebrationDone(true), CELEBRATION_DURATION_MS);
     return () => clearTimeout(timer);
   }, [showCelebration]);
 
@@ -153,6 +158,11 @@ const GameSessionScreen = () => {
     },
     [openModal]
   );
+
+  const goHome = () => {
+    allowExitRef.current = true;
+    navigation.popTo('Home');
+  };
 
   // Uscita con conferma (freccia, tasto o gesto indietro): la partita resta riprendibile dalla Home
   useEffect(() => {
@@ -207,10 +217,14 @@ const GameSessionScreen = () => {
   useEffect(() => {
     // Chi è stato rimosso o non può rientrare non salva la partita nello storico
     const excluded = endReason === 'kicked' || endReason === 'unauthorized' || endReason === 'not_found';
+    // persistResult è asincrona: l'eventuale avviso (setSnackbar) arriva solo dopo il salvataggio
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if ((hasFinished || gameEnded) && !excluded) persistResult(players);
   }, [players, hasFinished, gameEnded, endReason, persistResult]);
 
-  // Gestione della fine partita (tutti hanno finito, scadenza o credenziali non valide)
+  // Gestione della fine partita (tutti hanno finito, scadenza o credenziali non valide): reazione,
+  // una sola volta, all'evento del server, che apre la finestra con l'esito
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!gameEnded || endHandledRef.current) return;
     endHandledRef.current = true;
@@ -220,10 +234,7 @@ const GameSessionScreen = () => {
     const leaveGame = () => afterModalClose(goHome);
     if (endReason === 'ended') {
       openModal('leaderboard');
-      if (iWon) {
-        SoundManager.playVictorySound();
-        setShowCelebration(true);
-      }
+      if (iWon) SoundManager.playVictorySound();
     } else if (endReason === 'expired') {
       showDialog({
         seal: '時',
@@ -259,11 +270,7 @@ const GameSessionScreen = () => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameEnded, endReason]);
-
-  const goHome = () => {
-    allowExitRef.current = true;
-    navigation.popTo('Home');
-  };
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Pulsante "+1": piccolo rimbalzo e un'onda che si allarga
   const pressScale = useSharedValue(1);
@@ -280,9 +287,9 @@ const GameSessionScreen = () => {
       return;
     }
     SoundManager.playPieceSound();
-    pressScale.value = withSequence(withTiming(0.9, { duration: 70 }), withSpring(1, { damping: 9, stiffness: 320 }));
-    ring.value = 0;
-    ring.value = withTiming(1, { duration: 520, easing: Easing.out(Easing.quad) });
+    pressScale.set(withSequence(withTiming(0.9, { duration: 70 }), withSpring(1, { damping: 9, stiffness: 320 })));
+    ring.set(0);
+    ring.set(withTiming(1, { duration: 520, easing: Easing.out(Easing.quad) }));
 
     const res = await addPiece();
     if (!res.ok && res.code !== 'rate_limited') setSnackbar(res.error || 'Pezzo non registrato');
@@ -714,7 +721,7 @@ const GameSessionScreen = () => {
         <View style={[styles.infoBox, { backgroundColor: colors.surfaceVariant }]}>
           <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>Sessione: {sessionName}</Text>
           <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>
-            Data: {SessionStorageService.formatDate(startedAtRef.current)}
+            Data: {SessionStorageService.formatDate(startedAt)}
           </Text>
           <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>{winnerText}</Text>
         </View>

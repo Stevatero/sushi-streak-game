@@ -68,6 +68,27 @@ const PetalView: React.FC<{ petal: Petal; height: number }> = ({ petal, height }
   );
 };
 
+const SAKURA_COLORS = ['#F7C6D0', '#F4B3C2', '#FBDDE4', '#FFFFFF', '#F09AAE'];
+
+function createPetals(width: number, confetti: string[]): Petal[] {
+  return Array.from({ length: PETALS }, (_, i) => {
+    const isConfetti = i % 5 === 0;
+    const palette = isConfetti ? confetti : SAKURA_COLORS;
+    return {
+      x: Math.random() * width,
+      size: isConfetti ? 7 + Math.random() * 4 : 12 + Math.random() * 10,
+      color: palette[Math.floor(Math.random() * palette.length)],
+      delay: Math.random() * 2200,
+      duration: 3200 + Math.random() * 2200,
+      sway: 18 + Math.random() * 36,
+      swayTurns: 0.8 + Math.random() * 1.4,
+      phase: Math.random() * Math.PI * 2,
+      spin: (Math.random() - 0.5) * 720,
+      round: isConfetti && Math.random() < 0.5,
+    };
+  });
+}
+
 interface SakuraCelebrationProps {
   isVisible: boolean;
 }
@@ -76,27 +97,11 @@ const SakuraCelebration: React.FC<SakuraCelebrationProps> = ({ isVisible }) => {
   const { width, height } = useWindowDimensions();
   const { colors } = useAppTheme();
 
-  const petals = useMemo<Petal[]>(() => {
-    if (!isVisible) return [];
-    const sakura = ['#F7C6D0', '#F4B3C2', '#FBDDE4', '#FFFFFF', '#F09AAE'];
-    const confetti = [colors.primary, colors.gold, colors.tertiary, colors.secondary];
-    return Array.from({ length: PETALS }, (_, i) => {
-      const isConfetti = i % 5 === 0;
-      const palette = isConfetti ? confetti : sakura;
-      return {
-        x: Math.random() * width,
-        size: isConfetti ? 7 + Math.random() * 4 : 12 + Math.random() * 10,
-        color: palette[Math.floor(Math.random() * palette.length)],
-        delay: Math.random() * 2200,
-        duration: 3200 + Math.random() * 2200,
-        sway: 18 + Math.random() * 36,
-        swayTurns: 0.8 + Math.random() * 1.4,
-        phase: Math.random() * Math.PI * 2,
-        spin: (Math.random() - 0.5) * 720,
-        round: isConfetti && Math.random() < 0.5,
-      };
-    });
-  }, [isVisible, width, colors]);
+  // Petali casuali generati una volta per ogni festeggiamento
+  const petals = useMemo<Petal[]>(
+    () => (isVisible ? createPetals(width, [colors.primary, colors.gold, colors.tertiary, colors.secondary]) : []),
+    [isVisible, width, colors]
+  );
 
   if (!isVisible) return null;
 
@@ -111,7 +116,7 @@ const SakuraCelebration: React.FC<SakuraCelebrationProps> = ({ isVisible }) => {
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 1000,
     elevation: 1000,
   },

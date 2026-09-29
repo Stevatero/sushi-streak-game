@@ -118,7 +118,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pattern: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: radii.lg,
   },
   center: {

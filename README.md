@@ -12,10 +12,10 @@
 
 <p align="center">
   <a href="https://github.com/Stevatero/sushi-streak-game/actions/workflows/ci.yml"><img src="https://github.com/Stevatero/sushi-streak-game/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versione-1.5.0-C94330" alt="Versione 1.5.0"></a>
-  <img src="https://img.shields.io/badge/Expo_SDK-54-000020?logo=expo" alt="Expo SDK 54">
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versione-1.6.0-C94330" alt="Versione 1.6.0"></a>
+  <img src="https://img.shields.io/badge/Expo_SDK-57-000020?logo=expo" alt="Expo SDK 57">
   <img src="https://img.shields.io/badge/Android-API_24%E2%80%9336-3DDC84?logo=android&logoColor=white" alt="Android API 24-36">
-  <img src="https://img.shields.io/badge/iOS-15.1%2B-000000?logo=apple&logoColor=white" alt="iOS 15.1+">
+  <img src="https://img.shields.io/badge/iOS-16.4%2B-000000?logo=apple&logoColor=white" alt="iOS 16.4+">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License"></a>
 </p>
 
@@ -127,7 +127,7 @@ Il design system è in `sushi-game-app/src/theme/theme.ts` (palette, tipografia,
 
 | Componente       | Tecnologie                                                                                     |
 | ---------------- | ---------------------------------------------------------------------------------------------- |
-| App              | Expo SDK 54, React Native 0.81 (New Architecture, Hermes), React 19, TypeScript strict         |
+| App              | Expo SDK 57, React Native 0.86 (New Architecture, Hermes), React 19.2, TypeScript 6 strict     |
 | UI e navigazione | Design system proprio su React Native Paper (Material 3), React Navigation 7, Reanimated 4     |
 | Animazioni       | Motore fisico della pila di sushi scritto come worklet sul thread UI; festa con petali animati |
 | Stato e dati     | Zustand, AsyncStorage, Socket.IO client                                                        |
@@ -292,7 +292,7 @@ La versione segue [SemVer](https://semver.org/lang/it/) ed è unica per tutto il
 Il workflow APK si ferma se la versione è già stata compilata da un altro commit, così ogni APK corrisponde a una versione diversa.
 
 Configurazione Android: `targetSdk`/`compileSdk` 36, `minSdk` 24, R8 e riduzione delle risorse, backup disabilitato, permessi minimi, App Links verificati su `sushi.dietalab.net/join`.
-Configurazione iOS: iOS 15.1+, solo iPhone (su iPad in modalità iPhone), nessun permesso richiesto, dati locali esclusi dal backup iCloud, Universal Links su `sushi.dietalab.net/join`.
+Configurazione iOS: iOS 16.4+, ciclo di vita a scene (SDK di iOS 27), solo iPhone (su iPad in modalità iPhone), nessun permesso richiesto, dati locali esclusi dal backup iCloud, Universal Links su `sushi.dietalab.net/join`.
 
 Procedura completa e checklist Play Store e App Store: **[docs/RELEASING.md](docs/RELEASING.md)**. Deploy del backend, monitoraggio e backup: **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)**.
 
@@ -319,7 +319,7 @@ Procedura completa e checklist Play Store e App Store: **[docs/RELEASING.md](doc
 - [x] Rimozione dei giocatori da parte dell'host
 - [x] Nuova icona e splash screen nello stile della nuova interfaccia
 - [ ] Prima pubblicazione su Google Play (traccia interna → chiusa → produzione)
-- [ ] Aggiornamento a Expo SDK 57 (risolve gli advisory residui delle dipendenze di build)
+- [x] Aggiornamento a Expo SDK 57 (risolve gli advisory "high" delle dipendenze di build)
 - [ ] Crash reporting opt-in (es. Sentry) tramite l'hook già presente in `src/utils/logger.ts`
 - [ ] Localizzazione in inglese
 - [x] Supporto iOS nel codice e nella configurazione (build EAS, Universal Links, pagina di invito)

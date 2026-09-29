@@ -82,7 +82,7 @@ Senza configurazione di firma, la build locale è firmata con la chiave di debug
 
 L'app è la stessa su Android e iOS (stesso codice, stesse funzioni). Le build iOS si fanno con EAS nel cloud: **non serve un Mac**, tranne per usare il Simulatore.
 
-Configurazione già nel repository: bundle identifier `com.stevatero.sushistreakapp` (con i suffissi delle varianti), solo iPhone (su iPad l'app gira in modalità iPhone), orientamento verticale, iOS 15.1+, Universal Links `applinks:sushi.dietalab.net` nella build di produzione, `ITSAppUsesNonExemptEncryption = false` (niente documentazione sull'esportazione della crittografia), dati locali esclusi dal backup iCloud, nessuna richiesta di permessi (microfono disattivato).
+Configurazione già nel repository: bundle identifier `com.stevatero.sushistreakapp` (con i suffissi delle varianti), solo iPhone (su iPad l'app gira in modalità iPhone), orientamento verticale, iOS 16.4+, ciclo di vita a scene di UIKit (`enableSceneSupport` di `expo-build-properties`, necessario con l'SDK di iOS 27), Universal Links `applinks:sushi.dietalab.net` nella build di produzione, `ITSAppUsesNonExemptEncryption = false` (niente documentazione sull'esportazione della crittografia), dati locali esclusi dal backup iCloud, nessuna richiesta di permessi (microfono disattivato).
 
 | Comando (`sushi-game-app`)      | Cosa serve                                    | Risultato                                                               |
 | ------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------- |
