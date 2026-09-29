@@ -4,7 +4,9 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react-native';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import HomeScreen from '../HomeScreen';
 import * as Clipboard from 'expo-clipboard';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api, ApiError } from '../../services/api';
+import { SessionStorageService } from '../../services/sessionStorage';
 
 const mockNavigate = jest.fn();
 
@@ -29,9 +31,71 @@ const renderHome = async () => {
   await act(async () => {});
 };
 
+const activeGame = {
+  sessionId: 'CENA',
+  sessionName: 'CENA',
+  playerId: 'p1',
+  playerName: 'Anna',
+  playerToken: 'tok',
+  isHost: false,
+  startedAt: '2026-01-01T20:00:00.000Z',
+  sessionStartedAt: 1000,
+};
+
+const serverInfo = (overrides = {}) => ({
+  sessionId: 'CENA',
+  sessionName: 'CENA',
+  playersCount: 2,
+  isActive: false,
+  status: 'ended',
+  startedAt: 1000,
+  expiresAt: 0,
+  players: [
+    { name: 'Anna', score: 4, finished: true },
+    { name: 'Luca', score: 7, finished: true },
+  ],
+  ...overrides,
+});
+
 describe('HomeScreen', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
+    await AsyncStorage.clear();
+    await SessionStorageService.clearActiveSession();
+  });
+
+  it('salva nello storico una partita chiusa mentre si era fuori', async () => {
+    await SessionStorageService.saveActiveSession(activeGame);
+    (api.getSessionInfo as jest.Mock).mockResolvedValue(serverInfo());
+    await renderHome();
+
+    expect(await screen.findByText('Sessione terminata')).toBeTruthy();
+    const [saved] = await SessionStorageService.getSavedSessions();
+    expect(saved).toMatchObject({ id: 'CENA:2026-01-01T20:00:00.000Z', winner: { name: 'Luca', score: 7 } });
+  });
+
+  it('non propone di rientrare in una nuova partita con lo stesso codice', async () => {
+    await SessionStorageService.saveActiveSession(activeGame);
+    (api.getSessionInfo as jest.Mock).mockResolvedValue(
+      serverInfo({ isActive: true, status: 'active', startedAt: 2000 })
+    );
+    await renderHome();
+
+    expect(await screen.findByText('Sessione terminata')).toBeTruthy();
+    expect(screen.queryByText('Riconnettiti')).toBeNull();
+    expect(await SessionStorageService.getSavedSessions()).toEqual([]);
+  });
+
+  it('propone di rientrare nella partita ancora in corso', async () => {
+    await SessionStorageService.saveActiveSession(activeGame);
+    (api.getSessionInfo as jest.Mock).mockResolvedValue(serverInfo({ isActive: true, status: 'active' }));
+    await renderHome();
+
+    fireEvent.press(await screen.findByText('Riconnettiti'));
+    expect(mockNavigate).toHaveBeenCalledWith(
+      'GameSession',
+      expect.objectContaining({ playerToken: 'tok', sessionStartedAt: 1000 })
+    );
   });
 
   it('crea una sessione e apre la partita con le credenziali ricevute', async () => {

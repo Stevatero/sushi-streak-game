@@ -48,12 +48,19 @@ type Events = {
 type Listener<T> = (payload: T) => void;
 
 const ACK_TIMEOUT_MS = 8000;
+// Nuovi tentativi di rientro nella partita dopo un errore temporaneo (server occupato, timeout…)
+const REJOIN_RETRY_MIN_MS = 2000;
+const REJOIN_RETRY_MAX_MS = 15000;
+// Errori definitivi: le credenziali non valgono più, riprovare è inutile
+const FATAL_JOIN_CODES = new Set(['unauthorized', 'not_found', 'bad_request']);
 
 class SocketService {
   private socket: Socket | null = null;
   private credentials: JoinCredentials | null = null;
   private status: ConnectionStatus = 'disconnected';
   private listeners = new Map<keyof Events, Set<Listener<any>>>();
+  private rejoinTimer: ReturnType<typeof setTimeout> | null = null;
+  private rejoinAttempts = 0;
 
   constructor() {
     // Quando l'app torna in primo piano forza la riconnessione se il socket è caduto
@@ -105,11 +112,20 @@ class SocketService {
     });
 
     socket.on('connect', () => {
-      this.setStatus('connected');
-      // Dopo ogni (ri)connessione il nuovo socket deve rientrare nella stanza della partita
-      this.rejoin();
+      // Dopo ogni (ri)connessione il nuovo socket deve rientrare nella stanza della partita: si è
+      // "connessi" solo quando il server ha confermato il rientro
+      if (this.credentials) {
+        this.setStatus('connecting');
+        this.rejoinAttempts = 0;
+        this.rejoin();
+      } else {
+        this.setStatus('connected');
+      }
     });
-    socket.on('disconnect', () => this.setStatus(this.credentials ? 'connecting' : 'disconnected'));
+    socket.on('disconnect', () => {
+      this.cancelRejoinRetry();
+      this.setStatus(this.credentials ? 'connecting' : 'disconnected');
+    });
     socket.io.on('reconnect_attempt', () => this.setStatus('connecting'));
     socket.on('connect_error', (err) => {
       logger.debug('Errore di connessione socket', { message: err.message });
@@ -125,13 +141,33 @@ class SocketService {
     return socket;
   }
 
+  private cancelRejoinRetry() {
+    if (this.rejoinTimer) clearTimeout(this.rejoinTimer);
+    this.rejoinTimer = null;
+  }
+
   private async rejoin() {
-    if (!this.credentials) return;
-    const response = await this.request('join_session', this.credentials);
+    const credentials = this.credentials;
+    if (!credentials) return;
+    this.cancelRejoinRetry();
+    const response = await this.request('join_session', credentials);
+    // Nel frattempo si è usciti dalla partita o si è entrati in un'altra
+    if (this.credentials !== credentials) return;
     if (response.ok && response.session) {
+      this.rejoinAttempts = 0;
+      this.setStatus('connected');
       this.emitLocal('session', response.session);
-    } else if (response.code !== 'timeout' && response.code !== 'offline') {
+    } else if (response.code && FATAL_JOIN_CODES.has(response.code)) {
       this.emitLocal('joinFailed', response);
+    } else if (response.code !== 'offline' && this.socket?.connected) {
+      // Errore temporaneo: si riprova con attesa crescente finché il socket resta connesso
+      const delay = Math.min(REJOIN_RETRY_MAX_MS, REJOIN_RETRY_MIN_MS * 2 ** this.rejoinAttempts);
+      this.rejoinAttempts += 1;
+      logger.debug('Rientro nella partita non riuscito, nuovo tentativo', { code: response.code, delay });
+      this.rejoinTimer = setTimeout(() => {
+        this.rejoinTimer = null;
+        this.rejoin();
+      }, delay);
     }
   }
 
@@ -158,7 +194,11 @@ class SocketService {
     this.credentials = credentials;
 
     if (socket.connected) {
-      if (changed) this.rejoin();
+      if (changed) {
+        this.setStatus('connecting');
+        this.rejoinAttempts = 0;
+        this.rejoin();
+      }
     } else {
       this.setStatus('connecting');
       socket.connect();
@@ -169,6 +209,7 @@ class SocketService {
   leaveSession() {
     const socket = this.socket;
     this.credentials = null;
+    this.cancelRejoinRetry();
     if (socket) {
       if (socket.connected) socket.emit('leave_session', {});
       socket.disconnect();

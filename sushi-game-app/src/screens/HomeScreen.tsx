@@ -15,8 +15,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Clipboard from 'expo-clipboard';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming, Easing } from 'react-native-reanimated';
 import { shareService } from '../services/shareService';
-import { SessionStorageService, ActiveSession } from '../services/sessionStorage';
-import { api, ApiError } from '../services/api';
+import { SessionStorageService, ActiveSession, buildSavedSession } from '../services/sessionStorage';
+import { api, ApiError, SessionInfo } from '../services/api';
 import { preferences } from '../services/preferences';
 import { PLAYER_NAME_MAX_LENGTH, SESSION_CODE_MAX_LENGTH, SESSION_CODE_MIN_LENGTH } from '../config';
 import { extractSessionCode, generateSessionCode, isValidSessionCode, sanitizeSessionCode } from '../utils/sessionCode';
@@ -30,6 +30,36 @@ import Seigaiha from '../components/ui/Seigaiha';
 
 type Mode = 'create' | 'join';
 type PendingAction = Mode | null;
+
+const sameName = (a: string, b: string) =>
+  a.replace(/\s+/g, ' ').trim().toLowerCase() === b.replace(/\s+/g, ' ').trim().toLowerCase();
+
+// Stato sul server della partita salvata per la ripresa
+function savedGameState(saved: ActiveSession, info: SessionInfo) {
+  // Stesso codice ma partita diversa: il codice è stato riutilizzato dopo la chiusura di quella salvata
+  const replaced = !!saved.sessionStartedAt && !!info.startedAt && info.startedAt !== saved.sessionStartedAt;
+  // Il giocatore non è più in classifica (rimosso dall'host)
+  const removed = !info.players.some((p) => sameName(p.name, saved.playerName));
+  return { replaced, removed, active: info.isActive && !replaced && !removed };
+}
+
+// Una partita chiusa mentre si era fuori dalla schermata di gioco finisce comunque nello storico
+async function saveClosedGame(saved: ActiveSession, info: SessionInfo) {
+  try {
+    await SessionStorageService.upsertSession(
+      buildSavedSession({
+        sessionId: saved.sessionId,
+        sessionName: saved.sessionName || saved.sessionId,
+        startedAt: saved.startedAt,
+        restaurant: '',
+        players: info.players,
+      }),
+      { keepExisting: true }
+    );
+  } catch {
+    // Lo storico non è indispensabile: la Home resta utilizzabile
+  }
+}
 
 const HomeScreen = () => {
   const [mode, setMode] = useState<Mode>('create');
@@ -87,8 +117,14 @@ const HomeScreen = () => {
         }
         const result = await shareService.getSessionInfo(saved.sessionId);
         if (cancelled) return;
+        let stillActive = result.status === 'error';
+        if (result.status === 'ok') {
+          const state = savedGameState(saved, result.info);
+          if (!result.info.isActive && !state.replaced && !state.removed) await saveClosedGame(saved, result.info);
+          if (cancelled) return;
+          stillActive = state.active;
+        }
         // Se il server non è raggiungibile lasciamo comunque la possibilità di riconnettersi
-        const stillActive = result.status === 'error' || (result.status === 'ok' && result.info.isActive);
         setActiveSession(stillActive ? saved : null);
         setExpiredSession(stillActive ? null : saved);
       })();
@@ -132,6 +168,7 @@ const HomeScreen = () => {
         playerName: trimmedPlayerName,
         playerToken: data.playerToken,
         isHost: true,
+        sessionStartedAt: data.startedAt,
       });
       setSessionName(generateSessionCode());
     } catch (err) {
@@ -158,6 +195,7 @@ const HomeScreen = () => {
         playerName: trimmedPlayerName,
         playerToken: data.playerToken,
         isHost: false,
+        sessionStartedAt: data.startedAt,
       });
       setSessionToJoin('');
     } catch (err) {
@@ -188,6 +226,7 @@ const HomeScreen = () => {
       playerName: session.playerName,
       playerToken: session.playerToken,
       isHost: session.isHost,
+      sessionStartedAt: session.sessionStartedAt,
     });
   };
 
