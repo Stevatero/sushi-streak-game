@@ -76,6 +76,8 @@ const SettingsScreen = () => {
 
   // La condivisione è disponibile finché il server considera la sessione attiva
   const canShare = !!sessionId && !gameEnded && status === 'active';
+  // Con una partita in corso la cancellazione dei dati non impedisce di rientrarvi
+  const gameInProgress = !!sessionId && !gameEnded;
 
   const copySessionCode = async () => {
     if (!sessionId) return;
@@ -102,7 +104,7 @@ const SettingsScreen = () => {
 
   const clearLocalData = async () => {
     try {
-      await preferences.clearAllLocalData();
+      await preferences.clearAllLocalData({ keepActiveSession: gameInProgress });
       setPreference('system');
       SoundManager.setSoundEnabled(true);
       setSoundEnabled(true);
@@ -117,8 +119,9 @@ const SettingsScreen = () => {
     setDialog({
       seal: '消',
       title: 'Cancellare i dati locali?',
-      message:
-        "Verranno eliminati da questo dispositivo lo storico delle partite, il nome salvato e le preferenze. L'operazione non si può annullare.",
+      message: gameInProgress
+        ? "Verranno eliminati da questo dispositivo lo storico delle partite, il nome salvato e le preferenze. La partita in corso resta disponibile per rientrare. L'operazione non si può annullare."
+        : "Verranno eliminati da questo dispositivo lo storico delle partite, il nome salvato e le preferenze. L'operazione non si può annullare.",
       confirmLabel: 'Cancella i dati',
       confirmIcon: 'delete-outline',
       destructive: true,

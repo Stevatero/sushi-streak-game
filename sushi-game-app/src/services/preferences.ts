@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logger } from '../utils/logger';
-import { STORAGE_KEYS } from './sessionStorage';
+import { SessionStorageService, STORAGE_KEYS } from './sessionStorage';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 
@@ -52,15 +52,18 @@ export const preferences = {
     }
   },
 
-  // Cancella tutti i dati salvati dall'app su questo dispositivo (storico, nome, preferenze, partita attiva)
-  async clearAllLocalData() {
+  // Cancella tutti i dati salvati dall'app su questo dispositivo (storico, nome, preferenze, partita attiva).
+  // Con keepActiveSession la partita in corso resta riprendibile.
+  async clearAllLocalData({ keepActiveSession = false }: { keepActiveSession?: boolean } = {}) {
     const keys = await AsyncStorage.getAllKeys();
     const ownKeys = keys.filter(
       (k) =>
-        Object.values(KEYS).includes(k) ||
-        Object.values(STORAGE_KEYS).includes(k as (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS]) ||
-        k.includes('_corrupted_')
+        (Object.values(KEYS).includes(k) ||
+          Object.values(STORAGE_KEYS).includes(k as (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS]) ||
+          k.includes('_corrupted_')) &&
+        !(keepActiveSession && k === STORAGE_KEYS.activeSession)
     );
     await AsyncStorage.multiRemove(ownKeys);
+    if (!keepActiveSession) await SessionStorageService.clearActiveSession();
   },
 };

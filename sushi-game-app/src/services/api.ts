@@ -14,6 +14,8 @@ export interface SessionInfo {
   playersCount: number;
   isActive: boolean;
   status: SessionStatus;
+  // Inizio della partita (server 1.7+): cambia se il codice viene riutilizzato per una nuova partita
+  startedAt?: number;
   expiresAt: number;
   players: PublicPlayer[];
 }
@@ -23,6 +25,7 @@ export interface SessionCredentials {
   sessionName: string;
   playerId: string;
   playerToken: string;
+  startedAt?: number;
   expiresAt: number;
 }
 

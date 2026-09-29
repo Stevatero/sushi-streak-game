@@ -225,6 +225,46 @@ describe('GameSessionScreen', () => {
     await waitFor(() => expect(mockDispatch).toHaveBeenCalledWith(action));
   });
 
+  it('riprendendo la partita il ristorante già indicato non viene cancellato', async () => {
+    const startedAt = '2026-01-01T20:00:00.000Z';
+    await SessionStorageService.saveActiveSession({
+      sessionId: 'CENA',
+      sessionName: 'Cena',
+      playerId: 'p1',
+      playerName: 'Anna',
+      playerToken: 'tok',
+      isHost: true,
+      startedAt,
+    });
+    await SessionStorageService.upsertSession({
+      id: `CENA:${startedAt}`,
+      sessionName: 'Cena',
+      restaurant: 'Sakura',
+      date: startedAt,
+      players: [{ id: 'p1', name: 'Anna', score: 3, finished: true }],
+      winner: { name: 'Anna', score: 3 },
+    });
+
+    await renderWithProviders(<GameSessionScreen />);
+    serverEmit('gameEnded', snapshot('ended', true));
+
+    await waitFor(async () => {
+      const saved = await SessionStorageService.getSavedSessions();
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({ id: `CENA:${startedAt}`, restaurant: 'Sakura' });
+      expect(saved[0].winner).toEqual({ name: 'Luca', score: 5 });
+    });
+  });
+
+  it('avvisa se un pezzo non viene contato perché si tocca troppo in fretta', async () => {
+    (socketService.addPiece as jest.Mock).mockResolvedValueOnce({ ok: false, code: 'rate_limited' });
+    await renderWithProviders(<GameSessionScreen />);
+    serverEmit('session', snapshot());
+
+    fireEvent.press(screen.getByLabelText('Aggiungi pezzo'));
+    expect(await screen.findByText('Troppo veloce: pezzo non contato')).toBeTruthy();
+  });
+
   it('se si viene rimossi avvisa e non salva la partita nello storico', async () => {
     await renderWithProviders(<GameSessionScreen />);
     serverEmit('session', { ...snapshot(), hostId: 'p2' });

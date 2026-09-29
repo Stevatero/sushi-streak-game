@@ -116,6 +116,28 @@ describe('socketService', () => {
     expect(onFail).toHaveBeenCalledWith(expect.objectContaining({ code: 'unauthorized' }));
   });
 
+  it('resta in riconnessione e riprova se il server non conferma il rientro', async () => {
+    jest.useFakeTimers();
+    try {
+      mockSocket.responses.join_session = { ok: false, code: 'internal' };
+      const service = loadService();
+      const onFail = jest.fn();
+      service.on('joinFailed', onFail);
+
+      service.joinSession(credentials);
+      await Promise.resolve();
+      expect(service.getStatus()).toBe('connecting');
+      expect(onFail).not.toHaveBeenCalled();
+
+      mockSocket.responses.join_session = { ok: true, session: snapshot };
+      await jest.advanceTimersByTimeAsync(2000);
+      expect(mockSocket.emitted.filter((e) => e.event === 'join_session')).toHaveLength(2);
+      expect(service.getStatus()).toBe('connected');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('le azioni offline non vengono inviate e restituiscono un errore', async () => {
     const service = loadService();
     await expect(service.addPiece()).resolves.toMatchObject({ ok: false, code: 'offline' });

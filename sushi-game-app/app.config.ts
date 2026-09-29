@@ -112,6 +112,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
     ['expo-audio', { microphonePermission: false, recordAudioAndroid: false }],
     './plugins/withoutUnusedAudioServices',
+    // Token della partita nell'archivio sicuro: niente biometria (nessun testo Face ID) e nessuna regola
+    // di backup, già disattivato con allowBackup: false
+    ['expo-secure-store', { faceIDPermission: false, configureAndroidBackup: false }],
     'expo-font',
     'expo-status-bar',
     'expo-asset',

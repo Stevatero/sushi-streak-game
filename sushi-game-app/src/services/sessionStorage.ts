@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { logger } from '../utils/logger';
 
 export interface SavedPlayer {
@@ -30,12 +31,17 @@ export interface ActiveSession {
   playerToken?: string;
   isHost: boolean;
   startedAt: string;
+  // Inizio della partita secondo il server: distingue partite diverse con lo stesso codice
+  sessionStartedAt?: number;
 }
 
 export const STORAGE_KEYS = {
   savedSessions: 'saved_sessions',
   activeSession: 'active_session',
 } as const;
+
+// Il token della partita in corso sta nell'archivio sicuro del sistema (Android Keystore, Portachiavi iOS)
+const SECURE_TOKEN_KEY = 'active_session_token';
 
 const MAX_SAVED_SESSIONS = 200;
 
@@ -81,6 +87,73 @@ function toActiveSession(value: unknown): ActiveSession | null {
     playerToken: isString(value.playerToken) ? value.playerToken : undefined,
     isHost: value.isHost === true,
     startedAt: isString(value.startedAt) ? value.startedAt : new Date().toISOString(),
+    sessionStartedAt: isNumber(value.sessionStartedAt) ? value.sessionStartedAt : undefined,
+  };
+}
+
+// Token salvato insieme all'id del giocatore, così non viene mai associato alla partita sbagliata
+async function readSecureToken(playerId: string): Promise<string | undefined> {
+  try {
+    const raw = await SecureStore.getItemAsync(SECURE_TOKEN_KEY);
+    if (!raw) return undefined;
+    const parsed: unknown = JSON.parse(raw);
+    return isObject(parsed) && parsed.playerId === playerId && isString(parsed.token) ? parsed.token : undefined;
+  } catch (error) {
+    logger.warn('Lettura del token non riuscita', error);
+    return undefined;
+  }
+}
+
+async function writeSecureToken(playerId: string, token: string): Promise<boolean> {
+  try {
+    await SecureStore.setItemAsync(SECURE_TOKEN_KEY, JSON.stringify({ playerId, token }));
+    return true;
+  } catch (error) {
+    logger.warn("Salvataggio del token nell'archivio sicuro non riuscito", error);
+    return false;
+  }
+}
+
+async function deleteSecureToken(): Promise<void> {
+  try {
+    await SecureStore.deleteItemAsync(SECURE_TOKEN_KEY);
+  } catch (error) {
+    logger.warn('Cancellazione del token non riuscita', error);
+  }
+}
+
+export interface ResultPlayer {
+  id?: string;
+  name: string;
+  score: number;
+  finished: boolean;
+}
+
+// Costruisce la voce dello storico di una partita (classifica ordinata, vincitori a pari merito)
+export function buildSavedSession(params: {
+  sessionId: string;
+  sessionName: string;
+  startedAt: string;
+  restaurant: string;
+  players: ResultPlayer[];
+  duration?: string;
+}): SavedSession {
+  const sorted = [...params.players]
+    .sort((a, b) => b.score - a.score)
+    .map((p, index) => ({ id: p.id ?? `player-${index}`, name: p.name, score: p.score, finished: p.finished }));
+  const best = sorted[0]?.score ?? 0;
+  const tied = sorted.filter((p) => p.score === best);
+  return {
+    id: `${params.sessionId}:${params.startedAt}`,
+    sessionName: params.sessionName,
+    restaurant: params.restaurant,
+    date: params.startedAt,
+    players: sorted,
+    winner: {
+      name: best > 0 ? tied.map((p) => p.name).join(' e ') : 'Nessuno',
+      score: best,
+    },
+    duration: params.duration,
   };
 }
 
@@ -113,18 +186,43 @@ async function readJson(key: string): Promise<unknown> {
   }
 }
 
+// Le modifiche allo storico (lettura, modifica, scrittura) vengono eseguite una alla volta: due
+// salvataggi ravvicinati non si sovrascrivono a vicenda
+let historyQueue: Promise<unknown> = Promise.resolve();
+function queueHistoryWrite<T>(task: () => Promise<T>): Promise<T> {
+  const run = historyQueue.then(task);
+  historyQueue = run.catch(() => undefined);
+  return run;
+}
+
 export class SessionStorageService {
-  // Inserisce o aggiorna una partita salvata (stesso id = stessa partita, niente duplicati)
-  static async upsertSession(session: SavedSession): Promise<void> {
-    try {
-      const existing = await this.getSavedSessions();
-      const others = existing.filter((s) => s.id !== session.id);
-      const updated = sortByDateDesc([session, ...others]).slice(0, MAX_SAVED_SESSIONS);
-      await AsyncStorage.setItem(STORAGE_KEYS.savedSessions, JSON.stringify(updated));
-    } catch (error) {
-      logger.error('Salvataggio partita non riuscito', error);
-      throw new Error('Impossibile salvare la sessione');
-    }
+  // Inserisce o aggiorna una partita salvata (stesso id = stessa partita, niente duplicati).
+  // Con keepExisting il ristorante e la durata già salvati restano se la nuova voce non li indica.
+  static upsertSession(session: SavedSession, options: { keepExisting?: boolean } = {}): Promise<void> {
+    return queueHistoryWrite(async () => {
+      try {
+        const existing = await this.getSavedSessions();
+        const previous = existing.find((s) => s.id === session.id);
+        const record =
+          options.keepExisting && previous
+            ? {
+                ...session,
+                restaurant: session.restaurant || previous.restaurant,
+                duration: session.duration ?? previous.duration,
+              }
+            : session;
+        const others = existing.filter((s) => s.id !== session.id);
+        const updated = sortByDateDesc([record, ...others]).slice(0, MAX_SAVED_SESSIONS);
+        await AsyncStorage.setItem(STORAGE_KEYS.savedSessions, JSON.stringify(updated));
+      } catch (error) {
+        logger.error('Salvataggio partita non riuscito', error);
+        throw new Error('Impossibile salvare la sessione');
+      }
+    });
+  }
+
+  static async getSavedSession(id: string): Promise<SavedSession | null> {
+    return (await this.getSavedSessions()).find((s) => s.id === id) ?? null;
   }
 
   static async getSavedSessions(): Promise<SavedSession[]> {
@@ -138,15 +236,17 @@ export class SessionStorageService {
     }
   }
 
-  static async deleteSession(sessionId: string): Promise<void> {
-    try {
-      const existingSessions = await this.getSavedSessions();
-      const filteredSessions = existingSessions.filter((session) => session.id !== sessionId);
-      await AsyncStorage.setItem(STORAGE_KEYS.savedSessions, JSON.stringify(filteredSessions));
-    } catch (error) {
-      logger.error('Eliminazione partita non riuscita', error);
-      throw new Error('Impossibile eliminare la sessione');
-    }
+  static deleteSession(sessionId: string): Promise<void> {
+    return queueHistoryWrite(async () => {
+      try {
+        const existingSessions = await this.getSavedSessions();
+        const filteredSessions = existingSessions.filter((session) => session.id !== sessionId);
+        await AsyncStorage.setItem(STORAGE_KEYS.savedSessions, JSON.stringify(filteredSessions));
+      } catch (error) {
+        logger.error('Eliminazione partita non riuscita', error);
+        throw new Error('Impossibile eliminare la sessione');
+      }
+    });
   }
 
   static async clearAllSessions(): Promise<void> {
@@ -158,9 +258,13 @@ export class SessionStorageService {
     }
   }
 
+  // Il token va nell'archivio sicuro; solo se questo non è disponibile resta in AsyncStorage
   static async saveActiveSession(session: ActiveSession): Promise<void> {
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.activeSession, JSON.stringify(session));
+      const { playerToken, ...rest } = session;
+      const secured = playerToken ? await writeSecureToken(session.playerId, playerToken) : false;
+      const record = secured || !playerToken ? rest : session;
+      await AsyncStorage.setItem(STORAGE_KEYS.activeSession, JSON.stringify(record));
     } catch (error) {
       logger.warn('Salvataggio sessione attiva non riuscito', error);
     }
@@ -168,7 +272,18 @@ export class SessionStorageService {
 
   static async getActiveSession(): Promise<ActiveSession | null> {
     try {
-      return toActiveSession(await readJson(STORAGE_KEYS.activeSession));
+      const session = toActiveSession(await readJson(STORAGE_KEYS.activeSession));
+      if (!session) return null;
+      // Le versioni precedenti salvavano il token in chiaro: lo si sposta nell'archivio sicuro
+      if (session.playerToken) {
+        if (await writeSecureToken(session.playerId, session.playerToken)) {
+          const { playerToken, ...rest } = session;
+          await AsyncStorage.setItem(STORAGE_KEYS.activeSession, JSON.stringify(rest));
+          return { ...rest, playerToken };
+        }
+        return session;
+      }
+      return { ...session, playerToken: await readSecureToken(session.playerId) };
     } catch (error) {
       logger.warn('Lettura sessione attiva non riuscita', error);
       return null;
@@ -181,6 +296,7 @@ export class SessionStorageService {
     } catch (error) {
       logger.warn('Pulizia sessione attiva non riuscita', error);
     }
+    await deleteSecureToken();
   }
 
   // Data di una partita salvata, se in formato ISO (null per le date legacy già formattate)

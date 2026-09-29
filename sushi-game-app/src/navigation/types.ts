@@ -7,6 +7,8 @@ export type GameSessionParams = {
   playerName: string;
   playerToken: string;
   isHost: boolean;
+  // Inizio della partita secondo il server (assente con i server precedenti alla 1.7)
+  sessionStartedAt?: number;
 };
 
 export type RootStackParamList = {

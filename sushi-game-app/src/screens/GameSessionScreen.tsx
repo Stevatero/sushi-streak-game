@@ -18,7 +18,7 @@ import SushiStack from '../components/SushiStack';
 import SakuraCelebration from '../components/SakuraCelebration';
 import SoundManager from '../utils/SoundManager';
 import { plural } from '../utils/plural';
-import { SessionStorageService, SavedSession } from '../services/sessionStorage';
+import { SessionStorageService, buildSavedSession } from '../services/sessionStorage';
 import { shareService } from '../services/shareService';
 import { RESTAURANT_NAME_MAX_LENGTH } from '../config';
 import { useExclusiveModal } from '../hooks/useExclusiveModal';
@@ -34,6 +34,8 @@ import Sheet from '../components/ui/Sheet';
 import Tag from '../components/ui/Tag';
 
 const CELEBRATION_DURATION_MS = 6000;
+// Dopo aver finito, lo storico si aggiorna al massimo ogni SAVE_DEBOUNCE_MS mentre gli altri mangiano
+const SAVE_DEBOUNCE_MS = 1500;
 
 // Posizione "sportiva": a pari punteggio si condivide il posto (1, 2, 2, 4)
 const rankOf = (players: Player[], score: number) => 1 + players.filter((p) => p.score > score).length;
@@ -47,7 +49,7 @@ const GameSessionScreen = () => {
   const theme = useAppTheme();
   const { colors } = theme;
   const insets = useSafeAreaInsets();
-  const { sessionId, sessionName, playerName, playerId, playerToken, isHost } = route.params;
+  const { sessionId, sessionName, playerName, playerId, playerToken, isHost, sessionStartedAt } = route.params;
 
   const {
     players,
@@ -91,6 +93,10 @@ const GameSessionScreen = () => {
   const [startedAt, setStartedAt] = useState(() => new Date().toISOString());
   const startedAtRef = useRef(startedAt);
   const restaurantRef = useRef('');
+  // true quando il giocatore ha salvato il ristorante in questa schermata (anche vuoto)
+  const restaurantEditedRef = useRef(false);
+  // Classifica in attesa di essere salvata nello storico (salvataggio differito)
+  const pendingSaveRef = useRef<Player[] | null>(null);
   const allowExitRef = useRef(false);
   const endHandledRef = useRef(false);
   // Salvataggio iniziale della sessione attiva: la pulizia di fine partita deve avvenire dopo
@@ -126,10 +132,17 @@ const GameSessionScreen = () => {
 
     activeSavedRef.current = (async () => {
       const saved = await SessionStorageService.getActiveSession();
+      const resumed = saved?.sessionId === sessionId && saved.playerId === playerId;
       // In caso di riconnessione si conserva l'orario di inizio originale
-      if (saved?.sessionId === sessionId && saved.playerId === playerId && saved.startedAt) {
+      if (resumed && saved.startedAt) {
         startedAtRef.current = saved.startedAt;
         setStartedAt(saved.startedAt);
+      }
+      // ...e il ristorante già indicato per questa partita
+      const record = await SessionStorageService.getSavedSession(`${sessionId}:${startedAtRef.current}`);
+      if (record?.restaurant && !restaurantEditedRef.current) {
+        restaurantRef.current = record.restaurant;
+        setRestaurantName(record.restaurant);
       }
       await SessionStorageService.saveActiveSession({
         sessionId,
@@ -139,12 +152,13 @@ const GameSessionScreen = () => {
         playerToken,
         isHost,
         startedAt: startedAtRef.current,
+        sessionStartedAt: sessionStartedAt ?? (resumed ? saved.sessionStartedAt : undefined),
       });
     })();
 
     // All'uscita dalla schermata si abbandona la stanza e si chiude il socket
     return () => useGameStore.getState().resetGame();
-  }, [sessionId, sessionName, playerId, playerName, playerToken, isHost, startSession]);
+  }, [sessionId, sessionName, playerId, playerName, playerToken, isHost, sessionStartedAt, startSession]);
 
   useEffect(() => {
     if (!showCelebration) return;
@@ -190,23 +204,20 @@ const GameSessionScreen = () => {
   const persistResult = useCallback(
     async (list: Player[]) => {
       if (list.length === 0) return;
-      const sorted = [...list].sort((a, b) => b.score - a.score);
-      const best = sorted[0]?.score ?? 0;
-      const tied = sorted.filter((p) => p.score === best);
-      const record: SavedSession = {
-        id: `${sessionId}:${startedAtRef.current}`,
+      // Orario di inizio e ristorante di una partita ripresa vengono prima letti dallo storage:
+      // così la voce dello storico resta la stessa e non se ne crea una doppia
+      await activeSavedRef.current;
+      const record = buildSavedSession({
+        sessionId,
         sessionName,
+        startedAt: startedAtRef.current,
         restaurant: restaurantRef.current,
-        date: startedAtRef.current,
-        players: sorted,
-        winner: {
-          name: best > 0 ? tied.map((p) => p.name).join(' e ') : 'Nessuno',
-          score: best,
-        },
+        players: list,
         duration: SessionStorageService.formatDuration(startedAtRef.current),
-      };
+      });
       try {
-        await SessionStorageService.upsertSession(record);
+        // Il ristorante già salvato resta, a meno che il giocatore non lo abbia cambiato qui
+        await SessionStorageService.upsertSession(record, { keepExisting: !restaurantEditedRef.current });
       } catch {
         setSnackbar('Impossibile salvare la partita nello storico');
       }
@@ -214,14 +225,44 @@ const GameSessionScreen = () => {
     [sessionId, sessionName]
   );
 
-  // Salvataggio automatico nello storico quando il giocatore ha finito o la partita è chiusa
+  const persistResultRef = useRef(persistResult);
+  useEffect(() => {
+    persistResultRef.current = persistResult;
+  }, [persistResult]);
+
+  // Salvataggio automatico nello storico quando il giocatore ha finito o la partita è chiusa: a fine
+  // partita subito, prima (mentre gli altri mangiano ancora) al massimo ogni SAVE_DEBOUNCE_MS
+  /* eslint-disable react-hooks/set-state-in-effect -- persistResult è asincrona: l'eventuale avviso
+     (setSnackbar) arriva solo dopo il salvataggio */
   useEffect(() => {
     // Chi è stato rimosso o non può rientrare non salva la partita nello storico
     const excluded = endReason === 'kicked' || endReason === 'unauthorized' || endReason === 'not_found';
-    // persistResult è asincrona: l'eventuale avviso (setSnackbar) arriva solo dopo il salvataggio
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if ((hasFinished || gameEnded) && !excluded) persistResult(players);
+    if (excluded || !(hasFinished || gameEnded)) {
+      pendingSaveRef.current = null;
+      return;
+    }
+    if (gameEnded) {
+      pendingSaveRef.current = null;
+      persistResult(players);
+      return;
+    }
+    pendingSaveRef.current = players;
+    const timer = setTimeout(() => {
+      pendingSaveRef.current = null;
+      persistResult(players);
+    }, SAVE_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
   }, [players, hasFinished, gameEnded, endReason, persistResult]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  // Uscendo dalla schermata si salva l'eventuale classifica ancora in attesa
+  useEffect(
+    () => () => {
+      const pending = pendingSaveRef.current;
+      if (pending) persistResultRef.current(pending);
+    },
+    []
+  );
 
   // Gestione della fine partita (tutti hanno finito, scadenza o credenziali non valide): reazione,
   // una sola volta, all'evento del server, che apre la finestra con l'esito
@@ -293,7 +334,11 @@ const GameSessionScreen = () => {
     ring.set(withTiming(1, { duration: 520, easing: Easing.out(Easing.quad) }));
 
     const res = await addPiece();
-    if (!res.ok && res.code !== 'rate_limited') setSnackbar(res.error || 'Pezzo non registrato');
+    if (!res.ok) {
+      setSnackbar(
+        res.code === 'rate_limited' ? 'Troppo veloce: pezzo non contato' : res.error || 'Pezzo non registrato'
+      );
+    }
   };
 
   const handleRemovePiece = async () => {
@@ -362,6 +407,7 @@ const GameSessionScreen = () => {
 
   const saveRestaurant = async () => {
     restaurantRef.current = restaurantName.trim();
+    restaurantEditedRef.current = true;
     await persistResult(useGameStore.getState().players);
     closeModal();
     setSnackbar('Partita salvata nello storico');
