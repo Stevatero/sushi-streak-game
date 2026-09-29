@@ -19,6 +19,10 @@ Aggiornamento a Expo SDK 57.
 - iOS: versione minima 16.4 (da 15.1), richiesta dall'SDK; ciclo di vita a scene di UIKit, necessario per le app compilate con l'SDK di iOS 27.
 - Android invariato: API 24–36.
 
+### Corretto
+
+- Home: tolto il timbro 寿司 sovrapposto all'icona dell'app, che dalla 1.5.0 ha già il suo timbro 寿.
+
 ### Tecnico
 
 - Codice adattato alle regole del React Compiler introdotte da `eslint-config-expo` 57 (petali calcolati fuori dal render, festeggiamento ricavato dallo stato, valori animati con `set()`).
