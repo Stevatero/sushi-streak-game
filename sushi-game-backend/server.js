@@ -1,3 +1,8 @@
+// Configurazione da sushi-game-backend/.env (solo avviando il server, non nei test): va letta prima
+// del logger e di DEFAULT_CONFIG. Le variabili già impostate da PM2 o dalla shell hanno la precedenza.
+const { loadEnv } = require('./env');
+const envFile = require.main === module ? loadEnv() : null;
+
 const path = require('path');
 const http = require('http');
 const crypto = require('crypto');
@@ -772,7 +777,7 @@ if (require.main === module) {
   const instance = createServer();
   instance
     .start()
-    .then((port) => logger.info('Server in ascolto', { port, version: SERVICE_VERSION }))
+    .then((port) => logger.info('Server in ascolto', { port, version: SERVICE_VERSION, envFile }))
     .catch((err) => {
       logger.error('Avvio del server fallito', { err });
       process.exit(1);

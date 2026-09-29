@@ -22,17 +22,20 @@ cd /percorso/sushi-streak-game
 git pull
 cd sushi-game-backend
 npm ci --omit=dev
+cp .env.example .env && chmod 600 .env   # solo alla prima installazione, poi modifica i valori
 npm run backup            # backup prima dell'aggiornamento
 npm run prod              # prima installazione  (pm2 start ecosystem.config.js --env production)
 npm run restart           # aggiornamenti successivi
 pm2 save
 ```
 
-Le migrazioni del database vengono applicate automaticamente all'avvio (es. la 1.3.0 aggiunge la colonna `sessions.host_id`; per le partite già esistenti l'host è il primo giocatore entrato). Aggiorna il backend **prima** di distribuire una nuova versione dell'app che ne usa le funzioni: l'app 1.3.0 funziona anche con il backend 1.2.0, ma la rimozione dei giocatori richiede il backend 1.3.0. Il backend 1.4.0 non cambia il protocollo né il database: aggiunge il supporto agli Universal Links iOS e ai link all'App Store nella pagina di invito.
+Le migrazioni del database vengono applicate automaticamente all'avvio (es. la 1.3.0 aggiunge la colonna `sessions.host_id`; per le partite già esistenti l'host è il primo giocatore entrato). Aggiorna il backend **prima** di distribuire una nuova versione dell'app che ne usa le funzioni: l'app 1.3.0 funziona anche con il backend 1.2.0, ma la rimozione dei giocatori richiede il backend 1.3.0. Il backend 1.4.0 non cambia il protocollo né il database: aggiunge il supporto agli Universal Links iOS e ai link all'App Store nella pagina di invito. Il backend 1.4.1 legge la configurazione da `sushi-game-backend/.env`.
 
 ### Variabili d'ambiente
 
-Vedi [`sushi-game-backend/.env.example`](../sushi-game-backend/.env.example). In produzione impostare almeno:
+La configurazione del server va in **`sushi-game-backend/.env`** (formato `NOME=valore`, una variabile per riga), creato da [`.env.example`](../sushi-game-backend/.env.example). Il file è escluso da git e resta solo sul server: proteggilo con `chmod 600 .env`, perché è letto solo dall'utente che esegue PM2. Il server lo carica all'avvio (dal backend 1.4.1), e lo usa anche `npm run backup`. Le variabili già presenti nell'ambiente del processo (PM2, shell) hanno la precedenza sul file. Dopo ogni modifica riavvia con `pm2 restart sushi-streak-backend --update-env`.
+
+In produzione impostare almeno:
 
 - `PRIVACY_CONTACT`: email o URL mostrati nella pagina `/privacy`
 - `ANDROID_CERT_SHA256`: impronta del certificato di firma Play, per gli App Links
@@ -41,7 +44,7 @@ Vedi [`sushi-game-backend/.env.example`](../sushi-game-backend/.env.example). In
 - `IOS_APP_STORE_URL` (facoltativa, dopo la pubblicazione su App Store): link di download su iPhone e Smart App Banner nella pagina di invito
 - `DB_PATH`: percorso del database fuori dalla cartella del codice (es. `/var/lib/sushi-streak/sushi_game.db`)
 
-Le variabili possono essere aggiunte nella sezione `env_production` di `ecosystem.config.js` **sul server** (senza committare valori sensibili) o esportate nell'ambiente del processo PM2.
+Non aggiungere variabili in `ecosystem.config.js` sul server: è versionato, e una modifica locale blocca `git pull`. Se una vecchia installazione le contiene, spostale in `.env` e ripristina il file con `git checkout -- ecosystem.config.js`. Le variabili di `env_production` in `ecosystem.config.js` (es. `PORT`, `HOST`) valgono comunque più del file `.env`.
 
 ## nginx
 

@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 // Backup consistente del database SQLite (anche con il server in esecuzione) tramite VACUUM INTO.
 // Uso: node scripts/backup.js [cartella-destinazione]
-// Variabili: DB_PATH (default: ../sushi_game.db), BACKUP_DIR, BACKUP_KEEP (default 14 file).
+// Variabili: DB_PATH (default: ../sushi_game.db), BACKUP_DIR, BACKUP_KEEP (default 14 file),
+// lette anche da sushi-game-backend/.env come fa il server.
+
+const { loadEnv } = require('../env');
+
+loadEnv();
 
 const fs = require('fs');
 const path = require('path');

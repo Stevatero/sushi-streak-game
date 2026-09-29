@@ -7,6 +7,14 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-09-29
+
+Configurazione del backend in un file `.env`.
+
+### Corretto
+
+- Backend: all'avvio viene caricato `sushi-game-backend/.env`, se esiste, come indicato in `.env.example`: prima il file veniva ignorato e le variabili andavano scritte in `ecosystem.config.js` sul server, bloccando `git pull`. Le variabili già impostate nell'ambiente (PM2, shell) hanno la precedenza. Anche lo script di backup legge il file.
+
 ## [1.4.0] - 2026-09-28
 
 Conferme nello stile dell'app, annullamento animato e preparazione per iOS.
@@ -119,7 +127,8 @@ Prima versione preparata per la pubblicazione sul Google Play Store.
 
 Versione di sviluppo interna, non pubblicata sugli store.
 
-[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.4.1...HEAD
+[1.4.1]: https://github.com/Stevatero/sushi-streak-game/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.2.0...v1.3.0
 [1.2.0]: https://github.com/Stevatero/sushi-streak-game/releases/tag/v1.2.0

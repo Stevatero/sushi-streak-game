@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/Stevatero/sushi-streak-game/actions/workflows/ci.yml"><img src="https://github.com/Stevatero/sushi-streak-game/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versione-1.4.0-C94330" alt="Versione 1.4.0"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versione-1.4.1-C94330" alt="Versione 1.4.1"></a>
   <img src="https://img.shields.io/badge/Expo_SDK-54-000020?logo=expo" alt="Expo SDK 54">
   <img src="https://img.shields.io/badge/Android-API_24%E2%80%9336-3DDC84?logo=android&logoColor=white" alt="Android API 24-36">
   <img src="https://img.shields.io/badge/iOS-15.1%2B-000000?logo=apple&logoColor=white" alt="iOS 15.1+">
@@ -229,7 +229,9 @@ L'app usa il dev client di Expo: installa sul dispositivo una build `development
 | `APP_VARIANT`            | `production`                 | `development` / `preview` / `production`: nome, application ID e deep link dell'app |
 | `ANDROID_VERSION_CODE`   | gestito da EAS               | `versionCode` per le build fuori da EAS (il workflow APK lo ricava dalla versione)  |
 
-### Backend (`sushi-game-backend/.env.example`)
+### Backend (`sushi-game-backend/.env`, vedi `.env.example`)
+
+All'avvio il server legge `sushi-game-backend/.env`, se esiste (anche `npm run backup` lo usa). Le variabili già impostate nell'ambiente (PM2, shell) hanno la precedenza sul file.
 
 | Variabile                | Default                               | Descrizione                                                      |
 | ------------------------ | ------------------------------------- | ---------------------------------------------------------------- |
@@ -247,6 +249,7 @@ L'app usa il dev client di Expo: installa sul dispositivo una build `development
 | `APPLE_TEAM_ID`          | —                                     | Team ID Apple per gli Universal Links iOS                        |
 | `IOS_BUNDLE_ID`          | `com.stevatero.sushistreakapp`        | Bundle ID iOS per gli Universal Links                            |
 | `IOS_APP_STORE_URL`      | —                                     | Pagina App Store: download su iPhone e Smart App Banner          |
+| `ENV_FILE`               | `.env` accanto a `server.js`          | Percorso alternativo del file di configurazione                  |
 
 Nessun secret è necessario per sviluppare: le credenziali di firma e pubblicazione sono gestite da EAS e GitHub Secrets.
 

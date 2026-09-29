@@ -172,7 +172,8 @@ test('le richieste JSON malformate restituiscono 400 senza dettagli interni', as
 test('lo script di backup crea una copia consistente del database', () => {
   const backupDir = path.join(tmpDir, 'backups');
   execFileSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'backup.js'), backupDir], {
-    env: { ...process.env, DB_PATH: path.join(tmpDir, 'test.db') },
+    // Nessun .env reale: la configurazione arriva solo dall'ambiente del test
+    env: { ...process.env, DB_PATH: path.join(tmpDir, 'test.db'), ENV_FILE: path.join(tmpDir, 'nessun.env') },
   });
   const files = fs.readdirSync(backupDir).filter((f) => f.endsWith('.db'));
   assert.equal(files.length, 1);
