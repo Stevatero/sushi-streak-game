@@ -34,7 +34,7 @@ class ShareService {
     const message =
       result.status === 'ok'
         ? this.createShareMessage(result.info, shareLink)
-        : `🍣 Unisciti alla mia partita "${sessionName}" su Sushi Streak!\n\nCodice: ${sessionId}\n🔗 ${shareLink}`;
+        : `🍣 Unisciti alla mia partita su Sushi Streak!\n\n🔑 Codice: ${sessionId}\n🔗 ${shareLink}`;
 
     try {
       // Il link è già nel messaggio: passarlo anche come "url" su iOS lo duplicherebbe (es. WhatsApp)
@@ -64,7 +64,6 @@ class ShareService {
     const statusText = sessionInfo.isActive ? 'Attiva' : 'Terminata';
 
     let message = `🍣 Sushi Streak - Unisciti alla partita!\n\n`;
-    message += `📋 Sessione: ${sessionInfo.sessionName}\n`;
     message += `🔑 Codice: ${sessionInfo.sessionId}\n`;
     message += `${statusEmoji} Stato: ${statusText}\n`;
     message += `👥 Giocatori: ${sessionInfo.playersCount}\n\n`;

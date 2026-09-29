@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/Stevatero/sushi-streak-game/actions/workflows/ci.yml"><img src="https://github.com/Stevatero/sushi-streak-game/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versione-1.6.0-C94330" alt="Versione 1.6.0"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versione-1.6.1-C94330" alt="Versione 1.6.1"></a>
   <img src="https://img.shields.io/badge/Expo_SDK-57-000020?logo=expo" alt="Expo SDK 57">
   <img src="https://img.shields.io/badge/Android-API_24%E2%80%9336-3DDC84?logo=android&logoColor=white" alt="Android API 24-36">
   <img src="https://img.shields.io/badge/iOS-16.4%2B-000000?logo=apple&logoColor=white" alt="iOS 16.4+">
