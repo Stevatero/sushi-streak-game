@@ -24,7 +24,6 @@ import type { RootNavigationProp } from '../navigation/types';
 import { fonts, radii, typography, useAppTheme } from '../theme/theme';
 import AppButton from '../components/ui/AppButton';
 import Field from '../components/ui/Field';
-import Hanko from '../components/ui/Hanko';
 import Panel from '../components/ui/Panel';
 import SectionTitle from '../components/ui/SectionTitle';
 import Seigaiha from '../components/ui/Seigaiha';
@@ -244,10 +243,13 @@ const HomeScreen = () => {
           showsVerticalScrollIndicator={false}
         >
           <Animated.View style={[styles.header, headerStyle]}>
-            <View style={styles.logoRow}>
-              <Image source={require('../../assets/icon.png')} style={styles.appIcon} resizeMode="cover" />
-              <Hanko label="寿司" size={40} tilt={-6} style={styles.logoHanko} />
-            </View>
+            {/* L'icona ha già il suo timbro 寿: nessun hanko sovrapposto */}
+            <Image
+              source={require('../../assets/icon.png')}
+              style={styles.appIcon}
+              resizeMode="cover"
+              accessibilityIgnoresInvertColors
+            />
             <Text style={[typography.display, styles.title, { color: colors.onBackground }]}>Sushi Streak</Text>
             <Text style={[typography.body, styles.tagline, { color: colors.onSurfaceVariant }]}>
               Chi mangia più sushi? Sfida i tuoi amici all&apos;ultimo nigiri.
@@ -447,19 +449,11 @@ const styles = StyleSheet.create({
   header: {
     marginBottom: 24,
   },
-  logoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    marginBottom: 18,
-  },
   appIcon: {
     width: 68,
     height: 68,
     borderRadius: 20,
-  },
-  logoHanko: {
-    marginLeft: -12,
-    marginBottom: -6,
+    marginBottom: 18,
   },
   title: {
     marginBottom: 6,
