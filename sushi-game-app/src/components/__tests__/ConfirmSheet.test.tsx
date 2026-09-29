@@ -1,20 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { act, fireEvent, screen } from '@testing-library/react-native';
+import { fireEvent, screen } from '@testing-library/react-native';
 import { renderWithProviders } from '../../test/renderWithProviders';
 import ConfirmSheet, { ConfirmOptions } from '../ui/ConfirmSheet';
 
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 jest.mock('react-native-safe-area-context', () => require('react-native-safe-area-context/jest/mock').default);
-
-// Il tema si carica in modo asincrono: se ne attende il caricamento dentro act
-const renderSheet = async (ui: React.ReactElement) => {
-  const result = renderWithProviders(ui);
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-  return result;
-};
 
 const base: ConfirmOptions = {
   seal: '完',
@@ -27,7 +18,7 @@ const base: ConfirmOptions = {
 
 describe('ConfirmSheet', () => {
   it('mostra titolo, messaggio e i due pulsanti', async () => {
-    await renderSheet(<ConfirmSheet options={base} onClose={jest.fn()} />);
+    await renderWithProviders(<ConfirmSheet options={base} onClose={jest.fn()} />);
     expect(screen.getByText('Hai finito?')).toBeTruthy();
     expect(screen.getByText('Non potrai più aggiungere pezzi.')).toBeTruthy();
     expect(screen.getByText('ごちそうさま')).toBeTruthy();
@@ -40,7 +31,7 @@ describe('ConfirmSheet', () => {
     const onConfirm = jest.fn();
     const onCancel = jest.fn();
     const options = { ...base, onConfirm, onCancel };
-    const { rerender } = await renderSheet(<ConfirmSheet options={options} onClose={onClose} />);
+    const { rerender } = await renderWithProviders(<ConfirmSheet options={options} onClose={onClose} />);
 
     fireEvent.press(screen.getByText('Conferma'));
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -56,7 +47,7 @@ describe('ConfirmSheet', () => {
   });
 
   it('senza etichetta di annullamento è un avviso con un solo pulsante', async () => {
-    await renderSheet(<ConfirmSheet options={{ ...base, cancelLabel: undefined }} onClose={jest.fn()} />);
+    await renderWithProviders(<ConfirmSheet options={{ ...base, cancelLabel: undefined }} onClose={jest.fn()} />);
     expect(screen.getByText('Conferma')).toBeTruthy();
     expect(screen.queryByText('Annulla')).toBeNull();
   });
