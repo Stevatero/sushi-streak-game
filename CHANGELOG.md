@@ -7,6 +7,36 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-09-29
+
+Revisione completa di app e backend: correzioni, sicurezza e affidabilità. Il backend va aggiornato prima
+dell'app; resta compatibile con le versioni già installate (i nuovi campi del protocollo sono facoltativi).
+
+### Corretto
+
+- Il nome del ristorante non viene più cancellato quando si rientra in una partita dopo averlo indicato.
+- Una partita che si chiude mentre si è fuori dalla schermata di gioco viene comunque salvata nello storico, con la classifica finale.
+- Riprendendo una partita non si crea più, in rari casi, una seconda voce nello storico.
+- La Home non propone più di rientrare in una partita nuova creata da altri con lo stesso codice di quella salvata, né in una partita da cui si è stati rimossi.
+- Se il server non conferma subito il rientro nella partita (es. errore temporaneo), l'app resta in "Riconnessione…" e riprova da sola, invece di mostrarsi online senza registrare i pezzi.
+- Toccando "+1" troppo in fretta l'app avvisa che il pezzo non è stato contato.
+- "Cancella dati locali" durante una partita non impedisce più di rientrarvi (e lo dice nella conferma).
+
+### Sicurezza
+
+- Il token della partita in corso è conservato nell'archivio sicuro del sistema (Android Keystore, Portachiavi iOS) e non più in chiaro; quello salvato dalle versioni precedenti viene spostato automaticamente.
+- Backend: limite di richieste per IP anche su informazioni della partita, pagina di invito e ingresso via socket (anche dietro nginx), contro la ricerca di codici a tentativi.
+- Backend: un giocatore rimosso dall'host non può rientrare nella stessa partita con lo stesso nome.
+- CI: `eas-cli` a versione fissa e action di GitHub fissate per SHA nei workflow che usano i secret.
+
+### Tecnico
+
+- Backend: le partite hanno un orario di inizio (`startedAt`, nelle risposte di creazione/ingresso, in `/info` e negli aggiornamenti) che distingue partite diverse con lo stesso codice.
+- Backend: creazione di partite con lo stesso codice serializzata (due richieste contemporanee non si sovrascrivono più) e chiusura delle partite scritta prima sul database e poi in memoria.
+- App: lo storico viene aggiornato al massimo ogni 1,5 secondi mentre gli altri giocano ancora, e le scritture sono serializzate.
+- Nuova dipendenza nativa `expo-secure-store` (nessuna nuova autorizzazione).
+- Versione unica per app e backend, come richiesto dal rilascio automatico (`CLAUDE.md` aggiornato).
+
 ## [1.6.1] - 2026-09-29
 
 Prima versione pubblicata automaticamente sul Google Play (test interno).
@@ -187,7 +217,8 @@ Prima versione preparata per la pubblicazione sul Google Play Store.
 
 Versione di sviluppo interna, non pubblicata sugli store.
 
-[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.6.1...HEAD
+[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.7.0...HEAD
+[1.7.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.6.1...v1.7.0
 [1.6.1]: https://github.com/Stevatero/sushi-streak-game/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.4.1...v1.5.0
