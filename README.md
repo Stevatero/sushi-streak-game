@@ -278,6 +278,7 @@ La versione segue [SemVer](https://semver.org/lang/it/) ed è unica per tutto il
 
 | Come                                     | Risultato                                                                               |
 | ---------------------------------------- | --------------------------------------------------------------------------------------- |
+| Nuova versione unita in `main`           | Dopo la CI verde: tag, GitHub Release, AAB su EAS e invio al Google Play (test interno) |
 | Actions → **APK Android** → Run workflow | APK di test senza EAS, pubblicato in `apk-<variante>-vX.Y.Z` e nel link fisso `-latest` |
 | `npm run build:dev`                      | Dev client EAS (`com.stevatero.sushistreakapp.dev`)                                     |
 | `npm run build:preview`                  | APK interno di test su EAS (`com.stevatero.sushistreakapp.preview`)                     |

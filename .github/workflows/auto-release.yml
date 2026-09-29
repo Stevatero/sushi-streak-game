@@ -1,0 +1,74 @@
+name: Release automatica
+
+# Dopo ogni CI verde su main: se la versione in sushi-game-app/package.json non ha ancora un tag
+# vX.Y.Z, crea il tag e avvia il workflow Release con l'invio al Google Play (traccia interna).
+#   push su main → CI → tag vX.Y.Z → GitHub Release → build AAB su EAS → Google Play, test interno
+# I push che non cambiano la versione (es. solo documentazione) non producono nessuna release.
+# Il tag viene creato con GITHUB_TOKEN, che non avvia altri workflow: per questo Release viene
+# richiamato direttamente da qui (workflow_call) e non parte una seconda volta dal push del tag.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-automatica
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    name: Nuova versione?
+    # Solo CI verdi di push su main (non PR, non esecuzioni manuali)
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Versione e tag
+        id: version
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          VERSION=$(node -p "require('./sushi-game-app/package.json').version")
+          BACKEND_VERSION=$(node -p "require('./sushi-game-backend/package.json').version")
+          TAG="v$VERSION"
+          # main può essere andato avanti durante la CI: si rilascia solo il commit più recente
+          git fetch --quiet origin main
+          if [ "$(git rev-parse origin/main)" != "$SHA" ]; then
+            echo "::notice::main è avanzato oltre ${SHA::7}: la release la valuterà la CI del commit successivo"
+            exit 0
+          fi
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null; then
+            echo "::notice::$TAG esiste già: nessuna nuova release"
+            exit 0
+          fi
+          if [ "$BACKEND_VERSION" != "$VERSION" ]; then
+            echo "::error::Versioni diverse: app $VERSION, backend $BACKEND_VERSION (la versione del progetto è unica)"
+            exit 1
+          fi
+          grep -q "^## \[$VERSION\]" CHANGELOG.md || { echo "::error::Manca la sezione [$VERSION] nel CHANGELOG"; exit 1; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "$TAG" "$SHA" -m "Sushi Streak $TAG"
+          git push origin "$TAG"
+          echo "Creato $TAG su ${SHA::7}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Release
+    needs: tag
+    if: needs.tag.outputs.tag != ''
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
+      submit: true
+    secrets: inherit
