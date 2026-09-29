@@ -23,6 +23,7 @@ Aggiornamento a Expo SDK 57.
 
 - Home: tolto il timbro 寿司 sovrapposto all'icona dell'app, che dalla 1.5.0 ha già il suo timbro 寿.
 - Android 16: il tasto indietro con la tastiera aperta chiudeva l'app invece della tastiera. Ora l'app usa il gesto "indietro predittivo" di Android.
+- Nei pannelli (es. nome del ristorante) il tasto indietro con la tastiera aperta chiude solo la tastiera, senza perdere quanto scritto.
 - Singolare con un solo pezzo o giocatore ("1 pezzo", "1 giocatore" invece di "1 pezzi", "1 giocatori") nella partita, nella classifica finale e nello storico.
 
 ### Tecnico

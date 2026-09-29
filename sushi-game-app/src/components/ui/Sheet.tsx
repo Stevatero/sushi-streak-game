@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { radii, typography, useAppTheme } from '../../theme/theme';
@@ -35,8 +35,17 @@ const Sheet: React.FC<SheetProps> = ({ visible, onClose, title, kanji, children,
 
   const sheetStyle = useAnimatedStyle(() => ({ transform: [{ translateY: offset.value }] }));
 
+  // Tasto indietro (Android): con la tastiera aperta chiude solo la tastiera, non il pannello con quanto scritto
+  const requestClose = () => {
+    if (Keyboard.isVisible()) {
+      Keyboard.dismiss();
+      return;
+    }
+    onClose();
+  };
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={requestClose} statusBarTranslucent>
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={styles.flex}>
           <Pressable
