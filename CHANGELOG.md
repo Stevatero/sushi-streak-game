@@ -7,9 +7,16 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-09-29
+
+Prima versione pubblicata automaticamente sul Google Play (test interno).
+
+> Backend invariato rispetto alla 1.4.1: cambia solo il numero di versione, unico per tutto il progetto.
+
 ### Tecnico
 
 - Rilascio automatico: unendo in `main` una nuova versione, dopo la CI verde vengono creati tag e GitHub Release, la build AAB su EAS e l'invio alla traccia di test interno del Google Play (workflow `auto-release.yml`).
+- Patch di Expo SDK 57 (`expo` 57.0.26, `expo-constants` 57.0.20).
 
 ### Corretto
 
@@ -180,7 +187,8 @@ Prima versione preparata per la pubblicazione sul Google Play Store.
 
 Versione di sviluppo interna, non pubblicata sugli store.
 
-[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/Stevatero/sushi-streak-game/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/Stevatero/sushi-streak-game/compare/v1.4.0...v1.4.1
