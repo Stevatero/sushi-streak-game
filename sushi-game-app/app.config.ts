@@ -45,7 +45,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
-  newArchEnabled: true,
   scheme: variantConfig.scheme,
   ios: {
     // Interfaccia pensata per il telefono: su iPad l'app gira in modalità iPhone (solo verticale)
@@ -71,7 +70,6 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       backgroundImage: './assets/adaptive-icon-background.png',
       backgroundColor: BRAND_COLOR,
     },
-    edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     // I dati locali includono i token delle partite: niente backup cloud o trasferimento dispositivo
     allowBackup: false,
@@ -113,6 +111,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ['expo-audio', { microphonePermission: false, recordAudioAndroid: false }],
     './plugins/withoutUnusedAudioServices',
     'expo-font',
+    'expo-status-bar',
     'expo-asset',
     [
       'expo-build-properties',
@@ -121,6 +120,10 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           // R8: offuscamento e riduzione del codice; rimozione delle risorse inutilizzate
           enableMinifyInReleaseBuilds: true,
           enableShrinkResourcesInReleaseBuilds: true,
+        },
+        ios: {
+          // Ciclo di vita a scene di UIKit: senza, le app compilate con l'SDK di iOS 27 non si avviano su iOS 27
+          enableSceneSupport: true,
         },
       },
     ],

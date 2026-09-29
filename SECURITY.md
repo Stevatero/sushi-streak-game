@@ -6,8 +6,8 @@ Riceve correzioni di sicurezza solo l'ultima versione pubblicata dell'app e il b
 
 | Versione | Supportata |
 | -------- | ---------- |
-| 1.5.x    | ✅         |
-| < 1.5    | ❌         |
+| 1.6.x    | ✅         |
+| < 1.6    | ❌         |
 
 ## Segnalare una vulnerabilità
 
@@ -34,4 +34,4 @@ Riceverai una prima risposta entro 7 giorni. Le vulnerabilità confermate vengon
 
 ## Rischi noti accettati
 
-- Alcune dipendenze di **build** dell'app (Metro, PostCSS in `@expo/metro-config`) presentano advisory di gravità alta che si risolvono solo aggiornando l'SDK Expo. Questi pacchetti non sono inclusi nell'app installata e processano solo file del progetto. L'aggiornamento dell'SDK è pianificato (vedi README → Roadmap).
+- Con Expo SDK 57 non restano advisory di gravità alta (la CI blocca `npm audit --omit=dev --audit-level=high`). Resta un advisory moderato su `uuid` 7 (GHSA-w5hq-g745-h8pq), usato da `xcode` → `@expo/config-plugins` solo durante `expo prebuild`: non è incluso nell'app installata e riguarda funzioni (v3/v5/v6 con buffer) che il prebuild non usa. Si risolverà con un prossimo aggiornamento dell'SDK.

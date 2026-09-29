@@ -7,6 +7,23 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-09-29
+
+Aggiornamento a Expo SDK 57.
+
+> Backend invariato rispetto alla 1.4.1: cambia solo il numero di versione, unico per tutto il progetto.
+
+### Modificato
+
+- Expo SDK 57 (da 54): React Native 0.86, React 19.2, Reanimated 4.5 e Worklets 0.10, TypeScript 6. Risolti gli advisory di sicurezza di gravità alta delle dipendenze di build (Metro, PostCSS).
+- iOS: versione minima 16.4 (da 15.1), richiesta dall'SDK; ciclo di vita a scene di UIKit, necessario per le app compilate con l'SDK di iOS 27.
+- Android invariato: API 24–36.
+
+### Tecnico
+
+- Codice adattato alle regole del React Compiler introdotte da `eslint-config-expo` 57 (petali calcolati fuori dal render, festeggiamento ricavato dallo stato, valori animati con `set()`).
+- CI: generazione del progetto nativo iOS su Linux a ogni PR (controlla il ciclo di vita a scene e gli Universal Links) e audit delle dipendenze bloccante già dal livello "high".
+
 ## [1.5.0] - 2026-09-29
 
 Nuova icona e nuovo splash screen.
@@ -143,7 +160,8 @@ Prima versione preparata per la pubblicazione sul Google Play Store.
 
 Versione di sviluppo interna, non pubblicata sugli store.
 
-[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.5.0...v1.6.0
 [1.5.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/Stevatero/sushi-streak-game/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.3.0...v1.4.0

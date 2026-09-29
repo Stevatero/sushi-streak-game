@@ -19,6 +19,20 @@ module.exports = defineConfig([
     rules: { 'no-console': 'off' },
   },
   {
+    // Script Node eseguiti da npm e dalla CI
+    files: ['scripts/**/*.js', 'plugins/**/*.js'],
+    languageOptions: { globals: { __dirname: 'readonly', __filename: 'readonly' } },
+  },
+  {
+    files: ['scripts/**/*.js'],
+    rules: { 'no-console': 'off' },
+  },
+  {
+    // I mock di jest.mock() vanno caricati con require
+    files: ['jest.setup.ts'],
+    rules: { '@typescript-eslint/no-require-imports': 'off' },
+  },
+  {
     files: ['**/__tests__/**', 'jest.setup.ts'],
     languageOptions: { globals: { jest: 'readonly', describe: 'readonly', it: 'readonly', expect: 'readonly' } },
   },

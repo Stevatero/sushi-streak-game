@@ -1,6 +1,6 @@
 # Privacy: "Sicurezza dei dati" (Google Play) e "Privacy dell'app" (App Store)
 
-Questo documento descrive i dati trattati da Sushi Streak **così come risultano dal codice** (versione 1.4.0, uguale su Android e iOS) e propone le risposte per il questionario _Data safety_ della Play Console e per la sezione _App Privacy_ di App Store Connect.
+Questo documento descrive i dati trattati da Sushi Streak **così come risultano dal codice** (versione 1.6.0, uguale su Android e iOS) e propone le risposte per il questionario _Data safety_ della Play Console e per la sezione _App Privacy_ di App Store Connect.
 Va riverificato a ogni release che introduca nuovi dati, SDK o servizi esterni.
 
 > Questo documento non è una consulenza legale e non attesta la conformità al GDPR: serve come base tecnica verificata per compilare il questionario e l'informativa. Le valutazioni legali restano a carico del titolare.

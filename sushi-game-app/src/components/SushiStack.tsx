@@ -138,6 +138,8 @@ const SushiStack: React.FC<SushiStackProps> = ({ pieceCount }) => {
   const freeSlotsRef = useRef(Array.from({ length: MAX_BODIES }, (_, i) => MAX_BODIES - 1 - i));
   const nextIdRef = useRef(0);
   const seqRef = useRef(0);
+  // pump si riprogramma da sola: il timer usa l'ultima versione tramite ref
+  const pumpRef = useRef<() => void>(() => undefined);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const frameCallbackRef = useRef<{ setActive: (active: boolean) => void } | null>(null);
 
@@ -250,8 +252,12 @@ const SushiStack: React.FC<SushiStackProps> = ({ pieceCount }) => {
       frameCallbackRef.current?.setActive(true);
     }
     if (removals.length > 0 || spawns.length > 0 || vanished) publish(list);
-    if (represented < target) timerRef.current = setTimeout(pump, STAGGER_MS);
+    if (represented < target) timerRef.current = setTimeout(() => pumpRef.current(), STAGGER_MS);
   }, [world, wake, publish, startVanish]);
+
+  useEffect(() => {
+    pumpRef.current = pump;
+  }, [pump]);
 
   useEffect(() => {
     if (!layout) return;
@@ -291,7 +297,7 @@ const SushiStack: React.FC<SushiStackProps> = ({ pieceCount }) => {
 
 const styles = StyleSheet.create({
   container: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     overflow: 'hidden',
   },
   sprite: {
