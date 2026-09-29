@@ -12,6 +12,8 @@ App per Android e iOS (Expo / React Native) per contare in tempo reale i pezzi d
 
   La versione in `sushi-game-app/package.json` è l'unica fonte: `app.config.ts` la usa come `versionName` e il workflow APK ne ricava il `versionCode` (`scripts/version-code.js`).
 
+- **Rilascio automatico**: unire in `main` una nuova versione avvia, dopo la CI verde, il workflow `auto-release.yml` (tag `vX.Y.Z`, GitHub Release, build AAB su EAS e invio alla traccia di test interno del Google Play). Non cambiare la versione in `main` se non si vuole pubblicare; vedi `docs/RELEASING.md`.
+
 - **Lingua**: interfaccia, commenti, documentazione, commit e PR in italiano.
 - **Commit**: Conventional Commits (`feat:`, `fix:`, `perf:`, `docs:`, `ci:`, `chore:`…). Il repository non accetta merge commit: le PR si uniscono con rebase.
 - **Changelog**: ogni modifica visibile all'utente va in `CHANGELOG.md` (sezione `Unreleased`, poi nella versione).

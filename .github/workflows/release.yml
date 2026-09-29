@@ -1,10 +1,13 @@
 name: Release
 
-# Si avvia con il push di un tag vX.Y.Z (es. v1.2.0).
-# 1. Verifica che il tag corrisponda alla versione in sushi-game-app/package.json
+# Si avvia in tre modi:
+#   - push di un tag vX.Y.Z (a mano);
+#   - dal workflow "Release automatica", quando la CI su main è verde e la versione è nuova;
+#   - a mano da Actions → Release → Run workflow, indicando un tag esistente.
+# 1. Verifica che il tag corrisponda alla versione in sushi-game-app/package.json e al CHANGELOG
 # 2. Crea la GitHub Release con le note della sezione corrispondente del CHANGELOG
 # 3. Se il secret EXPO_TOKEN è configurato, avvia la build Android di produzione (AAB) su EAS
-#    e, se richiesto manualmente, l'invio al Google Play (traccia interna, bozza)
+#    e, con "submit", attende la build e la invia al Google Play (traccia interna)
 
 on:
   push:
@@ -18,16 +21,26 @@ on:
         description: 'Invia la build al Google Play (traccia interna)'
         type: boolean
         default: false
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Tag esistente da rilasciare'
+        type: string
+        required: true
+      submit:
+        description: 'Invia la build al Google Play (traccia interna)'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref }}
   cancel-in-progress: false
 
 env:
-  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   github-release:
@@ -71,22 +84,32 @@ jobs:
     name: Build Android (EAS)
     needs: github-release
     runs-on: ubuntu-latest
+    # Con l'invio si attende la build su EAS (anche la coda del piano gratuito)
+    timeout-minutes: 240
     environment: production
     defaults:
       run:
         working-directory: sushi-game-app
     steps:
-      - name: Verifica credenziali EAS
+      - name: Verifica credenziali
         id: check
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+          SUBMIT: ${{ inputs.submit == true }}
         working-directory: .
         run: |
           if [ -z "$EXPO_TOKEN" ]; then
             echo "::notice::EXPO_TOKEN non configurato: build Android saltata (vedi docs/RELEASING.md)"
             echo "enabled=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+          # Senza la chiave del service account l'invio non può funzionare: meglio fermarsi subito,
+          # prima di consumare una build EAS
+          if [ "$SUBMIT" = "true" ] && [ -z "$GOOGLE_SERVICE_ACCOUNT_KEY" ]; then
+            echo "::error::Manca il secret GOOGLE_SERVICE_ACCOUNT_KEY (ambiente production) per l'invio al Google Play: vedi docs/RELEASING.md"
+            exit 1
           fi
       - uses: actions/checkout@v7
         if: steps.check.outputs.enabled == 'true'
@@ -100,13 +123,36 @@ jobs:
           cache-dependency-path: sushi-game-app/package-lock.json
       - if: steps.check.outputs.enabled == 'true'
         run: npm ci
-      - name: Build AAB di produzione
-        if: steps.check.outputs.enabled == 'true'
+      - name: Build AAB di produzione (senza invio)
+        if: steps.check.outputs.enabled == 'true' && inputs.submit != true
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
         run: npx --yes eas-cli@latest build --platform android --profile production --non-interactive --no-wait
-      - name: Invio a Google Play (traccia interna)
-        if: steps.check.outputs.enabled == 'true' && github.event.inputs.submit == 'true'
+      # Con l'invio si attende la fine della build e si invia proprio quella (non "l'ultima"): il
+      # versionCode viene incrementato da EAS (appVersionSource remote + autoIncrement)
+      - name: Build AAB di produzione
+        id: build
+        if: steps.check.outputs.enabled == 'true' && inputs.submit == true
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-        run: npx --yes eas-cli@latest submit --platform android --profile production --latest --non-interactive
+        run: |
+          # Il risultato va fuori dal repository: con requireCommit EAS rifiuta file non committati
+          OUT="$RUNNER_TEMP/eas-build.json"
+          npx --yes eas-cli@latest build --platform android --profile production --non-interactive --wait --json > "$OUT"
+          BUILD_ID=$(node -p "require(process.argv[1])[0].id" "$OUT")
+          node -p "const b = require(process.argv[1])[0]; 'Build ' + b.id + ': ' + b.status + ', versionCode ' + b.appBuildVersion" "$OUT"
+          echo "id=$BUILD_ID" >> "$GITHUB_OUTPUT"
+      - name: Invio a Google Play (traccia interna)
+        if: steps.check.outputs.enabled == 'true' && inputs.submit == true
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          GOOGLE_SERVICE_ACCOUNT_KEY: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_KEY }}
+          BUILD_ID: ${{ steps.build.outputs.id }}
+        run: |
+          # Chiave del service account solo per la durata del job (il file è escluso da git)
+          umask 077
+          printf '%s' "$GOOGLE_SERVICE_ACCOUNT_KEY" > google-service-account.json
+          npx --yes eas-cli@latest submit --platform android --profile production --id "$BUILD_ID" --non-interactive
+      - name: Rimuovi la chiave del service account
+        if: always() && steps.check.outputs.enabled == 'true'
+        run: rm -f google-service-account.json

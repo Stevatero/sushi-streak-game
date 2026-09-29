@@ -25,22 +25,37 @@
 
 ## Procedura di rilascio
 
-1. Verifica che `main` sia verde in CI.
-2. Aggiorna la versione dell'app (senza creare il tag):
+Il rilascio è automatico: basta unire in `main` una PR che porta una **nuova versione**.
+
+```
+PR con nuova versione → merge in main → CI verde → tag vX.Y.Z → GitHub Release
+  → build AAB su EAS (versionCode incrementato da EAS) → Google Play, traccia di test interno
+```
+
+1. Nella PR aggiorna la versione (senza creare il tag), uguale per app e backend:
    ```bash
-   cd sushi-game-app
-   npm version minor --no-git-tag-version   # oppure patch / major
+   cd sushi-game-app && npm version minor --no-git-tag-version       # oppure patch / major
+   cd ../sushi-game-backend && npm version minor --no-git-tag-version
    ```
-   Se cambia anche il backend, aggiorna `sushi-game-backend/package.json` allo stesso modo.
-3. In `CHANGELOG.md` sposta le voci di `Unreleased` in una nuova sezione `## [X.Y.Z] - AAAA-MM-GG` e aggiorna i link in fondo.
-4. Committa e crea il tag:
-   ```bash
-   git commit -am "chore(release): vX.Y.Z"
-   git tag -a vX.Y.Z -m "Sushi Streak vX.Y.Z"
-   git push origin main --follow-tags
-   ```
-5. Il workflow **Release** verifica che tag, `package.json` e CHANGELOG coincidano, crea la GitHub Release e, se `EXPO_TOKEN` è configurato, avvia la build AAB su EAS.
-6. Scarica l'AAB da EAS oppure usa `eas submit` (vedi sotto) e pubblicalo sulla traccia **interna** → **chiusa** → **produzione** della Play Console.
+2. In `CHANGELOG.md` sposta le voci di `Unreleased` in una nuova sezione `## [X.Y.Z] - AAAA-MM-GG` e aggiorna i link in fondo.
+3. Unisci la PR (rebase) quando la CI è verde.
+4. Sul push in `main` gira la **CI**. Quando è verde, il workflow **Release automatica** ([`auto-release.yml`](../.github/workflows/auto-release.yml)):
+   - se la versione di `sushi-game-app/package.json` ha già un tag `vX.Y.Z` non fa nulla (i push senza cambio di versione, es. solo documentazione, non producono release);
+   - se `main` è andato avanti durante la CI, lascia decidere alla CI del commit più recente;
+   - verifica che app e backend abbiano la stessa versione e che il CHANGELOG abbia la sezione `[X.Y.Z]`;
+   - crea il tag annotato `vX.Y.Z` sul commit e richiama il workflow **Release**.
+5. **Release** ([`release.yml`](../.github/workflows/release.yml)) crea la GitHub Release (pre-release) con le note del CHANGELOG, avvia la build AAB di produzione su EAS, ne **attende la fine** e invia **quella build** (`eas submit --id`) alla traccia **Test interno** del Google Play con stato `completed`: i tester la ricevono dal Play Store senza passaggi manuali.
+6. Dalla Play Console promuovi la release dalla traccia interna alla **chiusa** e poi alla **produzione**.
+
+La pipeline richiede i secret `EXPO_TOKEN` e `GOOGLE_SERVICE_ACCOUNT_KEY` (vedi [Secrets richiesti](#secrets-richiesti)). Senza `EXPO_TOKEN` si crea solo la GitHub Release; senza la chiave del service account la release automatica si ferma prima di avviare la build, con un errore che indica il secret mancante.
+
+**Altri modi di avviare una release**
+
+- Push manuale di un tag `vX.Y.Z`: GitHub Release e build AAB su EAS, **senza** invio al Google Play.
+- Actions → **Release** → _Run workflow_ con un tag esistente e l'opzione "Invia la build al Google Play": utile per ripetere una release fallita.
+- Da terminale: `npm run build:production`, poi `npm run submit:production` con la chiave in `sushi-game-app/google-service-account.json` (esclusa da git).
+
+**versionCode**: lo gestisce EAS (`appVersionSource: remote` e `autoIncrement` nel profilo `production`) e sale di uno a ogni build di produzione (la 1.6.0 è il 5). Non caricare sul Play Store bundle compilati fuori da EAS: userebbero un altro `versionCode`. Se serve riallinearlo: `npx eas-cli build:version:set -p android`.
 
 > Se il rilascio include modifiche al backend, distribuisci **prima** il backend (vedi [DEPLOYMENT.md](DEPLOYMENT.md)) e poi l'app.
 
@@ -112,13 +127,29 @@ Alla prima build `eas build -p ios` chiede di accedere con l'Apple ID e crea cer
 
 ## Secrets richiesti
 
-| Secret                             | Dove                                                                        | A cosa serve                                                                        |
-| ---------------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `EXPO_TOKEN`                       | GitHub → Settings → Secrets and variables → Actions (ambiente `production`) | Build e submit EAS dalla CI ([crea token](https://expo.dev/settings/access-tokens)) |
-| Service account Google Play (JSON) | Caricato in EAS: `eas credentials -p android` → _Google Service Account_    | `eas submit` verso la Play Console                                                  |
-| `ANDROID_CERT_SHA256`              | Variabile d'ambiente del backend                                            | Verifica degli App Links (`/.well-known/assetlinks.json`)                           |
-| `APPLE_TEAM_ID`                    | Variabile d'ambiente del backend                                            | Universal Links iOS (`/.well-known/apple-app-site-association`)                     |
-| Chiave API App Store Connect       | Caricata in EAS: `eas credentials -p ios` (facoltativa)                     | `eas submit -p ios` senza inserire ogni volta l'Apple ID                            |
+| Secret                       | Dove                                                                        | A cosa serve                                                                                                 |
+| ---------------------------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `EXPO_TOKEN`                 | GitHub → Settings → Secrets and variables → Actions (ambiente `production`) | Build e submit EAS dalla CI ([crea token](https://expo.dev/settings/access-tokens))                          |
+| `GOOGLE_SERVICE_ACCOUNT_KEY` | GitHub → Settings → Secrets and variables → Actions (ambiente `production`) | Contenuto del file JSON della chiave del service account Google Play, per `eas submit` dalla CI (vedi sotto) |
+| `ANDROID_CERT_SHA256`        | Variabile d'ambiente del backend                                            | Verifica degli App Links (`/.well-known/assetlinks.json`)                                                    |
+| `APPLE_TEAM_ID`              | Variabile d'ambiente del backend                                            | Universal Links iOS (`/.well-known/apple-app-site-association`)                                              |
+| Chiave API App Store Connect | Caricata in EAS: `eas credentials -p ios` (facoltativa)                     | `eas submit -p ios` senza inserire ogni volta l'Apple ID                                                     |
+
+### Service account Google Play
+
+Serve a `eas submit` per caricare i bundle senza interazione. Si configura una volta sola:
+
+1. [Google Cloud Console](https://console.cloud.google.com/): crea (o scegli) un progetto e attiva la **Google Play Android Developer API** (API e servizi → Libreria).
+2. IAM e amministrazione → **Account di servizio** → _Crea account di servizio_ (es. `eas-submit`), senza ruoli sul progetto. Poi apri l'account → **Chiavi** → _Aggiungi chiave_ → _Crea nuova chiave_ → **JSON**: si scarica il file della chiave.
+3. [Play Console](https://play.google.com/console) → **Utenti e autorizzazioni** → _Invita nuovi utenti_ → email dell'account di servizio (`…@….iam.gserviceaccount.com`) → **Autorizzazioni app**: aggiungi Sushi Streak con _Rilascia app sui canali di test_ (e, se vuoi promuovere in produzione dalla CI, _Rilascia in produzione…_) → _Invita utente_.
+4. Salva la chiave come secret dell'ambiente `production`, poi cancella il file scaricato:
+   ```bash
+   gh secret set GOOGLE_SERVICE_ACCOUNT_KEY --env production < percorso/della/chiave.json
+   ```
+5. Prova: Actions → **Release** → _Run workflow_ con l'ultimo tag e "Invia la build al Google Play" attivo (consuma una build EAS), oppure attendi la prossima versione.
+
+> Google può impiegare fino a 24-36 ore prima che un account di servizio appena invitato sia accettato dall'API: un errore di permessi al primo invio si risolve riprovando più tardi.
+> La prima release di un'app va creata a mano nella Play Console (già fatto per la 1.6.0): prima di allora l'API accetta solo bozze.
 
 ## Checklist Google Play (prima pubblicazione)
 
@@ -143,4 +174,5 @@ Alla prima build `eas build -p ios` chiede di accedere con l'Apple ID e crea cer
 - [ ] Questionario **Sicurezza dei dati**: vedi [DATA_SAFETY.md](DATA_SAFETY.md).
 - [ ] Classificazione dei contenuti (IARC), pubblico di destinazione, dichiarazione annunci (nessun annuncio).
 - [ ] Per i nuovi account personali: test chiuso con almeno 12 tester per 14 giorni prima dell'accesso alla produzione.
-- [ ] Configurare `EXPO_TOKEN` e il service account per automatizzare build e submit.
+- [x] `EXPO_TOKEN` configurato (ambiente `production`).
+- [ ] Service account Google Play e secret `GOOGLE_SERVICE_ACCOUNT_KEY` per l'invio automatico (vedi [Service account Google Play](#service-account-google-play)).

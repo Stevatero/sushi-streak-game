@@ -7,6 +7,14 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 
 ## [Unreleased]
 
+### Tecnico
+
+- Rilascio automatico: unendo in `main` una nuova versione, dopo la CI verde vengono creati tag e GitHub Release, la build AAB su EAS e l'invio alla traccia di test interno del Google Play (workflow `auto-release.yml`).
+
+### Corretto
+
+- Il messaggio di invito condiviso (es. su WhatsApp) non ripete più il codice come "Sessione" e "Codice": resta solo il codice.
+
 ## [1.6.0] - 2026-09-29
 
 Aggiornamento a Expo SDK 57.
