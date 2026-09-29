@@ -6,8 +6,8 @@ Riceve correzioni di sicurezza solo l'ultima versione pubblicata dell'app e il b
 
 | Versione | Supportata |
 | -------- | ---------- |
-| 1.6.x    | ✅         |
-| < 1.6    | ❌         |
+| 1.7.x    | ✅         |
+| < 1.7    | ❌         |
 
 ## Segnalare una vulnerabilità
 
@@ -27,9 +27,10 @@ Riceverai una prima risposta entro 7 giorni. Le vulnerabilità confermate vengon
 
 - Comunicazione app ↔ server solo via HTTPS/WSS; traffico in chiaro disabilitato nelle build di rilascio.
 - Ogni giocatore riceve un token casuale; sul server se ne conserva solo l'hash SHA-256 e il confronto è a tempo costante.
-- Validazione di tutti gli input REST e Socket.IO, limitazione delle richieste, header di sicurezza (Helmet) e Content Security Policy con nonce sulle pagine web.
-- Backup Android disabilitato (`allowBackup: false`) e dati locali esclusi dal backup iCloud (`RCTAsyncStorageExcludeFromBackup`) per non esportare i token locali.
-- Nessun secret nel repository: le credenziali (EAS, Google Play) sono gestite tramite GitHub Secrets ed EAS.
+- Validazione di tutti gli input REST e Socket.IO, limitazione delle richieste per IP (creazione, ingresso, informazioni della partita, pagina di invito, ingresso via socket), header di sicurezza (Helmet) e Content Security Policy con nonce sulle pagine web.
+- Sul dispositivo il token della partita in corso è nell'archivio sicuro del sistema (`expo-secure-store`: Android Keystore, Portachiavi iOS); backup Android disabilitato (`allowBackup: false`) e dati locali esclusi dal backup iCloud (`RCTAsyncStorageExcludeFromBackup`).
+- L'host può rimuovere un giocatore, che non può rientrare nella stessa partita con lo stesso nome.
+- Nessun secret nel repository: le credenziali (EAS, Google Play) sono gestite tramite GitHub Secrets ed EAS; nei workflow `eas-cli` ha una versione fissa e le action sono fissate per SHA.
 - CI con audit delle dipendenze, scansione dei secrets (gitleaks) e Dependabot.
 
 ## Rischi noti accettati

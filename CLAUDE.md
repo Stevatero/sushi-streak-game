@@ -5,7 +5,7 @@ App per Android e iOS (Expo / React Native) per contare in tempo reale i pezzi d
 ## Regole del progetto
 
 - **Versione a ogni modifica compilata**: ogni volta che si modificano app o backend e si esegue una build (APK, EAS o rilascio), aggiorna prima la versione SemVer:
-  - `cd sushi-game-app && npm version <patch|minor|major> --no-git-tag-version` (e lo stesso in `sushi-game-backend` se cambia il backend);
+  - `cd sushi-game-app && npm version <patch|minor|major> --no-git-tag-version` e lo stesso in `sushi-game-backend`, anche se il backend non cambia: la versione del progetto è unica e il rilascio automatico (`auto-release.yml`) si ferma se app e backend hanno versioni diverse;
   - PATCH per correzioni, MINOR per nuove funzionalità, MAJOR per cambi incompatibili del protocollo app/server;
   - sposta le voci di `Unreleased` in `CHANGELOG.md` in una nuova sezione `## [X.Y.Z] - AAAA-MM-GG` e aggiorna i link in fondo;
   - con una nuova MINOR o MAJOR aggiorna la tabella di `SECURITY.md`.
