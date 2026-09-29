@@ -139,7 +139,7 @@ Alla prima build `eas build -p ios` chiede di accedere con l'Apple ID e crea cer
 - [ ] Account sviluppatore Google Play e creazione dell'app nella Play Console.
 - [ ] Impostare `PRIVACY_CONTACT` sul backend (email di contatto mostrata nell'informativa).
 - [ ] Impostare `ANDROID_CERT_SHA256` sul backend con l'impronta SHA-256 della **chiave di firma dell'app** (Play Console → Test e rilascio → Integrità dell'app) per verificare gli App Links.
-- [ ] Scheda dello store: descrizione breve e completa, screenshot telefono (almeno 2), grafica in primo piano 1024×500 e icona 512×512 (pronte in [`play-store/feature-graphic.png`](play-store/feature-graphic.png) e [`play-store/play-store-icon-512.png`](play-store/play-store-icon-512.png), generate con `npm run icons`).
+- [ ] Scheda dello store: testi pronti in [`play-store/listing.md`](play-store/listing.md) (nome, descrizione breve e completa, note di rilascio, categoria), screenshot telefono in [`play-store/screenshots/`](play-store/screenshots/), grafica in primo piano 1024×500 e icona 512×512 (pronte in [`play-store/feature-graphic.png`](play-store/feature-graphic.png) e [`play-store/play-store-icon-512.png`](play-store/play-store-icon-512.png), generate con `npm run icons`).
 - [ ] Questionario **Sicurezza dei dati**: vedi [DATA_SAFETY.md](DATA_SAFETY.md).
 - [ ] Classificazione dei contenuti (IARC), pubblico di destinazione, dichiarazione annunci (nessun annuncio).
 - [ ] Per i nuovi account personali: test chiuso con almeno 12 tester per 14 giorni prima dell'accesso alla produzione.

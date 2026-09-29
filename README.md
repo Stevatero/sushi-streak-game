@@ -101,7 +101,7 @@ L'app non richiede registrazione e non contiene pubblicità, analytics o traccia
 ## Design
 
 <p align="center">
-  <img src="docs/screenshots/app-scuro.png" alt="Home, partita, vittoria e impostazioni in tema scuro" width="100%">
+  <img src="docs/screenshots/app-scuro.png" alt="Home, partita, podio finale e storico in tema scuro" width="100%">
 </p>
 
 Un'interfaccia fresca e moderna con un richiamo discreto al Giappone:
