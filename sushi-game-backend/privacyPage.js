@@ -4,7 +4,7 @@
 
 const { escapeHtml } = require('./joinPage');
 
-const LAST_UPDATED = '28 settembre 2026';
+const LAST_UPDATED = '29 settembre 2026';
 
 function renderPrivacyPage({ contact, retentionDays, inactivityMinutes, nonce = '' }) {
   const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
@@ -57,7 +57,8 @@ function renderPrivacyPage({ contact, retentionDays, inactivityMinutes, nonce = 
       <td rowspan="3">Per tutta la durata della partita; la partita si chiude quando tutti hanno finito o dopo
         ${Number(inactivityMinutes)} minuti di inattività. I dati delle partite chiuse vengono cancellati
         automaticamente dopo ${Number(retentionDays)} giorni. Se chi ha creato la partita ti rimuove, i tuoi dati
-        di quella partita vengono cancellati subito.</td>
+        di quella partita vengono cancellati subito: resta solo il nickname, per impedire di rientrare nella
+        stessa partita con quel nome, e viene cancellato insieme alla partita.</td>
     </tr>
     <tr><td>Codice/nome della sessione, punteggio (pezzi), stato "ho finito"</td><td>Funzionamento del gioco e della classifica in tempo reale</td></tr>
     <tr><td>Identificativo casuale del giocatore e token segreto (salvato come impronta crittografica)</td><td>Permettere la riconnessione alla partita e impedire che altri modifichino il tuo punteggio</td></tr>
@@ -77,7 +78,8 @@ function renderPrivacyPage({ contact, retentionDays, inactivityMinutes, nonce = 
   <h2>Dati salvati solo sul tuo dispositivo</h2>
   <p>L'app salva localmente, senza inviarli al server: il nome usato nell'ultima partita, lo storico delle
   partite (nomi dei partecipanti, punteggi, eventuale ristorante indicato da te), le preferenze di tema e audio
-  e le credenziali per riconnetterti alla partita in corso. Questi dati sono esclusi dal backup automatico
+  e le credenziali per riconnetterti alla partita in corso (il token segreto è conservato nell'archivio sicuro
+  del sistema: Android Keystore o Portachiavi di iOS). Questi dati sono esclusi dal backup automatico
   (Android e iCloud) e puoi cancellarli in qualsiasi momento da <em>Impostazioni → Cancella dati locali</em> o
   disinstallando l'app.</p>
 
