@@ -34,4 +34,4 @@ Riceverai una prima risposta entro 7 giorni. Le vulnerabilità confermate vengon
 
 ## Rischi noti accettati
 
-- Con Expo SDK 57 non restano advisory di gravità alta (la CI blocca `npm audit --omit=dev --audit-level=high`). Resta un advisory moderato su `uuid` 7 (GHSA-w5hq-g745-h8pq), usato da `xcode` → `@expo/config-plugins` solo durante `expo prebuild`: non è incluso nell'app installata e riguarda funzioni (v3/v5/v6 con buffer) che il prebuild non usa. Si risolverà con un prossimo aggiornamento dell'SDK.
+- Nessuno al momento: con Expo SDK 57 `npm audit` non riporta vulnerabilità (la CI blocca dal livello "high"). `uuid` 7, usato da `xcode` in `@expo/config-plugins` durante `expo prebuild`, è forzato alla 11.1.1 con `overrides` in `sushi-game-app/package.json` (advisory GHSA-w5hq-g745-h8pq); `xcode` usa solo `uuid.v4()`, invariato. Rimuovere l'override quando l'SDK includerà una versione corretta.
