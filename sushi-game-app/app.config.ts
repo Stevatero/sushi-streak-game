@@ -68,6 +68,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ...(versionCode ? { versionCode } : {}),
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
+      backgroundImage: './assets/adaptive-icon-background.png',
       backgroundColor: BRAND_COLOR,
     },
     edgeToEdgeEnabled: true,

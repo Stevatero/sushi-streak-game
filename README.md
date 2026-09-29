@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/Stevatero/sushi-streak-game/actions/workflows/ci.yml"><img src="https://github.com/Stevatero/sushi-streak-game/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versione-1.4.1-C94330" alt="Versione 1.4.1"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versione-1.5.0-C94330" alt="Versione 1.5.0"></a>
   <img src="https://img.shields.io/badge/Expo_SDK-54-000020?logo=expo" alt="Expo SDK 54">
   <img src="https://img.shields.io/badge/Android-API_24%E2%80%9336-3DDC84?logo=android&logoColor=white" alt="Android API 24-36">
   <img src="https://img.shields.io/badge/iOS-15.1%2B-000000?logo=apple&logoColor=white" alt="iOS 15.1+">
@@ -259,6 +259,7 @@ Nessun secret è necessario per sviluppare: le credenziali di firma e pubblicazi
 # App
 cd sushi-game-app
 npm run check          # lint + typecheck + formattazione + test
+npm run icons          # rigenera icone, splash e grafica Google Play da assets/source/*.svg
 npm run test:ci        # test con coverage
 
 # Backend
@@ -316,7 +317,7 @@ Procedura completa e checklist Play Store e App Store: **[docs/RELEASING.md](doc
 - [x] Animazione della pila di sushi fluida (fisica sul thread UI)
 - [x] Nuova interfaccia con richiamo allo stile giapponese, tema scuro
 - [x] Rimozione dei giocatori da parte dell'host
-- [ ] Nuova icona e splash screen nello stile della nuova interfaccia
+- [x] Nuova icona e splash screen nello stile della nuova interfaccia
 - [ ] Prima pubblicazione su Google Play (traccia interna → chiusa → produzione)
 - [ ] Aggiornamento a Expo SDK 57 (risolve gli advisory residui delle dipendenze di build)
 - [ ] Crash reporting opt-in (es. Sentry) tramite l'hook già presente in `src/utils/logger.ts`

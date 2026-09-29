@@ -7,6 +7,22 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-09-29
+
+Nuova icona e nuovo splash screen.
+
+> Backend invariato rispetto alla 1.4.1: cambia solo il numero di versione, unico per tutto il progetto.
+
+### Modificato
+
+- Nuova icona nello stile dell'app: un nigiri con il timbro hanko 寿 vermiglione su fondo prugna con le onde seigaiha. Su Android l'icona adattiva ha lo stesso sfondo a onde e il soggetto resta nella zona sicura con ogni forma (cerchio, squircle, goccia).
+- Nuovo splash screen con lo stesso soggetto; nuova icona anche nella Home.
+
+### Aggiunto
+
+- Sorgenti SVG di icone, splash e grafica per Google Play in `sushi-game-app/assets/source/` e comando `npm run icons` per rigenerare i PNG, senza dipendenze aggiuntive.
+- Grafica in primo piano (1024×500) e icona (512×512) per la scheda di Google Play in `docs/play-store/`.
+
 ## [1.4.1] - 2026-09-29
 
 Configurazione del backend in un file `.env`.
@@ -127,7 +143,8 @@ Prima versione preparata per la pubblicazione sul Google Play Store.
 
 Versione di sviluppo interna, non pubblicata sugli store.
 
-[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.4.1...v1.5.0
 [1.4.1]: https://github.com/Stevatero/sushi-streak-game/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.3.0...v1.4.0
 [1.3.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.2.0...v1.3.0
