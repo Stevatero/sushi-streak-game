@@ -29,7 +29,7 @@ npm run restart           # aggiornamenti successivi
 pm2 save
 ```
 
-Le migrazioni del database vengono applicate automaticamente all'avvio (es. la 1.3.0 aggiunge la colonna `sessions.host_id`; per le partite già esistenti l'host è il primo giocatore entrato). Aggiorna il backend **prima** di distribuire una nuova versione dell'app che ne usa le funzioni: l'app 1.3.0 funziona anche con il backend 1.2.0, ma la rimozione dei giocatori richiede il backend 1.3.0. Il backend 1.4.0 non cambia il protocollo né il database: aggiunge il supporto agli Universal Links iOS e ai link all'App Store nella pagina di invito. Il backend 1.4.1 legge la configurazione da `sushi-game-backend/.env`.
+Le migrazioni del database vengono applicate automaticamente all'avvio (es. la 1.3.0 aggiunge la colonna `sessions.host_id`; per le partite già esistenti l'host è il primo giocatore entrato). Aggiorna il backend **prima** di distribuire una nuova versione dell'app che ne usa le funzioni: l'app 1.3.0 funziona anche con il backend 1.2.0, ma la rimozione dei giocatori richiede il backend 1.3.0. Il backend 1.4.0 non cambia il protocollo né il database: aggiunge il supporto agli Universal Links iOS e ai link all'App Store nella pagina di invito. Il backend 1.4.1 legge la configurazione da `sushi-game-backend/.env`. Il backend 1.7.0 aggiunge le colonne `sessions.started_at` e `sessions.kicked_names` e limita per IP anche le letture pubbliche e l'ingresso via socket: dietro nginx serve `X-Forwarded-For` anche sulla connessione WebSocket (vedi la configurazione sotto).
 
 ### Variabili d'ambiente
 
