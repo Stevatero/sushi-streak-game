@@ -22,6 +22,7 @@ Aggiornamento a Expo SDK 57.
 ### Corretto
 
 - Home: tolto il timbro 寿司 sovrapposto all'icona dell'app, che dalla 1.5.0 ha già il suo timbro 寿.
+- Singolare con un solo pezzo o giocatore ("1 pezzo", "1 giocatore" invece di "1 pezzi", "1 giocatori") nella partita, nella classifica finale e nello storico.
 
 ### Tecnico
 
