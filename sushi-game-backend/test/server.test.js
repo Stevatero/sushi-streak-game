@@ -17,7 +17,12 @@ const clients = [];
 
 before(async () => {
   tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sushi-test-'));
-  instance = createServer({ dbPath: path.join(tmpDir, 'test.db'), inactivityMs: 60 * 60 * 1000 });
+  instance = createServer({
+    dbPath: path.join(tmpDir, 'test.db'),
+    inactivityMs: 60 * 60 * 1000,
+    // I test creano molte partite dallo stesso IP: il limite di produzione (30/min) li bloccherebbe
+    writeRateLimit: { max: 1000, windowMs: 60 * 1000 },
+  });
   const port = await instance.start(0);
   baseUrl = `http://127.0.0.1:${port}`;
 });
@@ -335,5 +340,85 @@ test("un Team ID Apple non valido non espone l'associazione Universal Links", as
   } finally {
     await server.close();
     fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('un giocatore rimosso non può rientrare con lo stesso nome, anche dopo un riavvio', async () => {
+  const host = (await post('/api/sessions', { sessionName: 'BAN', playerName: 'Host' })).body;
+  const guest = (await post('/api/sessions/join', { sessionId: 'BAN', playerName: 'Intruso' })).body;
+  const socket = await connect();
+  await emit(socket, 'join_session', { sessionId: 'BAN', playerId: host.playerId, token: host.playerToken });
+  assert.equal((await emit(socket, 'kick_player', { playerId: guest.playerId })).ok, true);
+
+  const again = await post('/api/sessions/join', { sessionId: 'BAN', playerName: 'intruso' });
+  assert.equal(again.status, 403);
+  assert.equal(again.body.code, 'kicked');
+  instance.sessions.clear();
+  assert.equal((await post('/api/sessions/join', { sessionId: 'BAN', playerName: 'INTRUSO' })).status, 403);
+  assert.equal((await post('/api/sessions/join', { sessionId: 'BAN', playerName: 'Amico' })).status, 200);
+});
+
+test("l'inizio della partita distingue un codice riutilizzato", async () => {
+  const first = (await post('/api/sessions', { sessionName: 'REUSE', playerName: 'Uno' })).body;
+  assert.ok(first.startedAt > 0);
+  const info = await (await fetch(`${baseUrl}/api/sessions/REUSE/info`)).json();
+  assert.equal(info.startedAt, first.startedAt);
+
+  const socket = await connect();
+  await emit(socket, 'join_session', { sessionId: 'REUSE', playerId: first.playerId, token: first.playerToken });
+  await emit(socket, 'player_finished');
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  const second = (await post('/api/sessions', { sessionName: 'REUSE', playerName: 'Due' })).body;
+  assert.ok(second.startedAt > first.startedAt);
+  const joined = (await post('/api/sessions/join', { sessionId: 'REUSE', playerName: 'Tre' })).body;
+  assert.equal(joined.startedAt, second.startedAt);
+});
+
+test('due creazioni contemporanee dello stesso codice non si sovrascrivono', async () => {
+  const results = await Promise.all([
+    post('/api/sessions', { sessionName: 'RACE', playerName: 'A' }),
+    post('/api/sessions', { sessionName: 'RACE', playerName: 'B' }),
+  ]);
+  assert.deepEqual(results.map((r) => r.status).sort(), [201, 409]);
+  const winner = results.find((r) => r.status === 201).body;
+  const socket = await connect();
+  const joined = await emit(socket, 'join_session', {
+    sessionId: 'RACE',
+    playerId: winner.playerId,
+    token: winner.playerToken,
+  });
+  assert.equal(joined.ok, true);
+});
+
+test('le letture pubbliche e gli ingressi via socket hanno un limite di frequenza per IP', async () => {
+  const limited = createServer({
+    dbPath: path.join(tmpDir, 'limits.db'),
+    readRateLimit: { max: 2, windowMs: 60 * 1000 },
+    socketJoinRateLimit: { max: 2, windowMs: 60 * 1000 },
+  });
+  const port = await limited.start(0);
+  const url = `http://127.0.0.1:${port}`;
+  try {
+    const statuses = [];
+    for (let i = 0; i < 3; i++) statuses.push((await fetch(`${url}/api/sessions/NOPE/info`)).status);
+    assert.deepEqual(statuses, [404, 404, 429]);
+
+    // Dietro il proxy locale conta l'IP del client indicato da X-Forwarded-For
+    const join = async (ip) => {
+      const socket = ioClient(url, {
+        transports: ['websocket'],
+        forceNew: true,
+        extraHeaders: { 'X-Forwarded-For': ip },
+      });
+      clients.push(socket);
+      await new Promise((resolve) => socket.on('connect', resolve));
+      return (await emit(socket, 'join_session', { sessionId: 'NOPE', playerId: 'x', token: 'y' })).code;
+    };
+    assert.deepEqual(
+      [await join('203.0.113.1'), await join('203.0.113.1'), await join('203.0.113.1'), await join('203.0.113.2')],
+      ['not_found', 'not_found', 'rate_limited', 'not_found']
+    );
+  } finally {
+    await limited.close();
   }
 });

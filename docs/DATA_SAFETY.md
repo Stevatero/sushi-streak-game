@@ -11,18 +11,20 @@ Va riverificato a ogni release che introduca nuovi dati, SDK o servizi esterni.
 
 | Dato                                         | Origine              | Uso                                       | Visibilità                                                               | Conservazione                               |
 | -------------------------------------------- | -------------------- | ----------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------- |
-| Nickname del giocatore                       | Inserito dall'utente | Classifica della partita                  | Partecipanti della partita e chiunque conosca il codice (`/join/CODICE`) | Durata partita + 30 giorni dalla chiusura   |
+| Nickname del giocatore                       | Inserito dall'utente | Classifica della partita                  | Partecipanti della partita e chiunque conosca il codice (`/join/CODICE`) | Durata partita + 30 giorni dalla chiusura¹  |
 | Codice/nome sessione                         | Inserito o generato  | Identificare la partita                   | Come sopra                                                               | Come sopra                                  |
 | Punteggio e stato "finito"                   | Azioni di gioco      | Classifica in tempo reale                 | Come sopra                                                               | Come sopra                                  |
 | ID giocatore (UUID casuale) + hash del token | Generati dal server  | Riconnessione e autorizzazione            | Nessuno (il token resta sul dispositivo)                                 | Come sopra                                  |
 | Indirizzo IP                                 | Connessione          | Trasmissione, limitazione delle richieste | Nessuno                                                                  | Transitorio; può comparire nei log di nginx |
 
-### Salvati solo sul dispositivo (AsyncStorage, esclusi dal backup Android e iCloud)
+¹ Se l'host rimuove un giocatore, i suoi dati vengono cancellati subito tranne il nickname, conservato (in minuscolo) solo per impedirne il rientro nella stessa partita e cancellato insieme alla partita.
+
+### Salvati solo sul dispositivo (esclusi dal backup Android e iCloud)
 
 - Ultimo nickname usato
 - Storico delle partite (nomi dei partecipanti, punteggi, ristorante facoltativo)
 - Preferenze tema e audio
-- Credenziali della partita in corso (ID giocatore e token)
+- Credenziali della partita in corso: ID giocatore in AsyncStorage, token nell'archivio sicuro del sistema (`expo-secure-store`: Android Keystore, Portachiavi iOS)
 
 Cancellabili da **Impostazioni → Cancella dati locali** o disinstallando l'app.
 

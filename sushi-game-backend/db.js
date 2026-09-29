@@ -69,6 +69,9 @@ async function migrate(db) {
   await addColumnIfMissing(db, 'players', 'joined_at', 'INTEGER');
   // v1.3: creatore della partita, che può rimuovere i giocatori
   await addColumnIfMissing(db, 'sessions', 'host_id', 'TEXT');
+  // v1.7: inizio della partita (distingue partite diverse con lo stesso codice) e nomi rimossi dall'host
+  await addColumnIfMissing(db, 'sessions', 'started_at', 'INTEGER');
+  await addColumnIfMissing(db, 'sessions', 'kicked_names', 'TEXT');
 
   await db.run('CREATE INDEX IF NOT EXISTS idx_players_session ON players (session_id)');
   await db.run('CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions (status, last_activity)');

@@ -34,6 +34,11 @@ const DEFAULT_CONFIG = {
   retentionMs: (Number(process.env.SESSION_RETENTION_DAYS) || 30) * 24 * 60 * 60 * 1000,
   sweepIntervalMs: 60 * 1000,
   maxPlayersPerSession: 30,
+  // Limiti di frequenza per IP: creazione/ingresso, letture pubbliche (info e pagina di invito) e
+  // ingresso via socket (anche le riconnessioni)
+  writeRateLimit: { max: 30, windowMs: 60 * 1000 },
+  readRateLimit: { max: 120, windowMs: 60 * 1000 },
+  socketJoinRateLimit: { max: 60, windowMs: 60 * 1000 },
   corsOrigins: process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',')
         .map((o) => o.trim())
@@ -116,7 +121,10 @@ function tokenMatches(token, storedHash) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-// Limitatore di richieste in memoria per IP (sufficiente per un'istanza singola)
+const LOOPBACK_RE = /^(127\.\d+\.\d+\.\d+|::1|::ffff:127\.\d+\.\d+\.\d+)$/;
+
+// Limitatore di richieste in memoria per chiave (IP), sufficiente per un'istanza singola.
+// Il middleware Express usa req.ip; allow(key) serve per gli eventi socket.
 function createRateLimiter({ max, windowMs }) {
   const hits = new Map();
   setInterval(() => {
@@ -126,29 +134,51 @@ function createRateLimiter({ max, windowMs }) {
     }
   }, windowMs).unref();
 
-  return (req, res, next) => {
+  const allow = (key) => {
     const now = Date.now();
-    const key = req.ip;
     const entry = hits.get(key);
     if (!entry || now - entry.start > windowMs) {
       hits.set(key, { start: now, count: 1 });
-      return next();
+      return true;
     }
     entry.count += 1;
-    if (entry.count > max) {
-      return res.status(429).json({ error: 'Troppe richieste, riprova tra poco', code: 'rate_limited' });
-    }
-    return next();
+    return entry.count <= max;
   };
+
+  const middleware = (req, res, next) => {
+    if (allow(req.ip)) return next();
+    return res.status(429).json({ error: 'Troppe richieste, riprova tra poco', code: 'rate_limited' });
+  };
+  middleware.allow = allow;
+  return middleware;
+}
+
+// SQLite salva created_at come 'AAAA-MM-GG HH:MM:SS' in UTC
+function parseSqliteTimestamp(value) {
+  if (typeof value !== 'string') return null;
+  const time = Date.parse(`${value.replace(' ', 'T')}Z`);
+  return Number.isNaN(time) ? null : time;
+}
+
+function parseKickedNames(value) {
+  try {
+    const list = JSON.parse(value || '[]');
+    return new Set(Array.isArray(list) ? list.filter((n) => typeof n === 'string') : []);
+  } catch {
+    return new Set();
+  }
 }
 
 function createServer(options = {}) {
   const config = { ...DEFAULT_CONFIG, ...options };
   const db = openDatabase(config.dbPath);
 
-  // Sessioni attive in memoria: id -> { id, name, status, lastActivity, hostId, players: Map<id, player> }
+  // Sessioni attive in memoria:
+  // id -> { id, name, status, startedAt, lastActivity, hostId, kickedNames: Set, players: Map<id, player> }
   const sessions = new Map();
   const pendingLoads = new Map();
+  // Codici in fase di creazione: due creazioni contemporanee dello stesso codice non si sovrappongono
+  const creating = new Set();
 
   const expiresAt = (session) => session.lastActivity + config.inactivityMs;
   const isExpired = (session) => Date.now() > expiresAt(session);
@@ -159,6 +189,8 @@ function createServer(options = {}) {
       id: session.id,
       name: session.name,
       status: isOpen(session) ? 'active' : session.status === 'active' ? 'expired' : session.status,
+      // Distingue due partite diverse con lo stesso codice (un codice chiuso si può riutilizzare)
+      startedAt: session.startedAt,
       expiresAt: expiresAt(session),
       hostId: session.hostId,
       players: [...session.players.values()].map((p) => ({
@@ -179,6 +211,7 @@ function createServer(options = {}) {
       playersCount: session.players.size,
       isActive: pub.status === 'active',
       status: pub.status,
+      startedAt: pub.startedAt,
       expiresAt: pub.expiresAt,
       players: pub.players.map(({ name, score, finished }) => ({ name, score, finished })),
     };
@@ -188,10 +221,12 @@ function createServer(options = {}) {
     return (err) => logger.error('Errore database', { context, err });
   }
 
+  // Prima il database, poi la memoria: se la scrittura fallisce la sessione resta attiva e coerente
+  // (la chiusura viene ritentata dal controllo periodico o dal prossimo evento)
   async function closeSession(session, status) {
+    await db.run('UPDATE sessions SET status = ?, ended_at = ? WHERE id = ?', [status, Date.now(), session.id]);
     session.status = status;
     sessions.delete(session.id);
-    await db.run('UPDATE sessions SET status = ?, ended_at = ? WHERE id = ?', [status, Date.now(), session.id]);
   }
 
   // Restituisce la sessione dalla memoria o la ricarica dal database (es. dopo un riavvio)
@@ -207,9 +242,11 @@ function createServer(options = {}) {
         id: row.id,
         name: row.name,
         status: row.status || 'active',
+        startedAt: row.started_at || parseSqliteTimestamp(row.created_at),
         lastActivity: row.last_activity || 0,
         // Le sessioni create prima della colonna host_id hanno come host il primo giocatore entrato
         hostId: row.host_id || rows[0]?.id || null,
+        kickedNames: parseKickedNames(row.kicked_names),
         players: new Map(
           rows.map((p) => [
             p.id,
@@ -310,7 +347,9 @@ function createServer(options = {}) {
   app.use(express.json({ limit: '10kb' }));
 
   const asyncRoute = (handler) => (req, res, next) => Promise.resolve(handler(req, res, next)).catch(next);
-  const writeLimiter = createRateLimiter({ max: 30, windowMs: 60 * 1000 });
+  const writeLimiter = createRateLimiter(config.writeRateLimit);
+  const readLimiter = createRateLimiter(config.readRateLimit);
+  const socketJoinLimiter = createRateLimiter(config.socketJoinRateLimit);
 
   app.get('/', (req, res) => {
     res.json({ status: 'OK', message: 'Sushi Streak Server is running!', timestamp: new Date().toISOString() });
@@ -348,63 +387,72 @@ function createServer(options = {}) {
       validateSessionId(sessionId);
       validatePlayerName(playerName);
 
-      const existing = await loadSession(sessionId);
-      if (existing && isOpen(existing)) {
+      if (creating.has(sessionId)) {
         throw new ApiError(409, 'Esiste già una sessione attiva con questo nome. Scegline un altro.', 'session_exists');
       }
-      if (existing) {
-        // Il codice di una sessione chiusa può essere riutilizzato
-        await db.run('DELETE FROM players WHERE session_id = ?', [sessionId]);
-        await db.run('DELETE FROM sessions WHERE id = ?', [sessionId]);
-      }
-
-      const now = Date.now();
-      const { player, token } = newPlayer(playerName);
+      creating.add(sessionId);
       try {
-        await db.run("INSERT INTO sessions (id, name, status, last_activity, host_id) VALUES (?, ?, 'active', ?, ?)", [
-          sessionId,
-          sessionName,
-          now,
-          player.id,
-        ]);
-      } catch (err) {
-        if (err.code === 'SQLITE_CONSTRAINT') {
-          throw new ApiError(
-            409,
-            'Esiste già una sessione attiva con questo nome. Scegline un altro.',
-            'session_exists'
-          );
-        }
-        throw err;
+        res.status(201).json(await createSession(sessionId, sessionName, playerName));
+      } finally {
+        creating.delete(sessionId);
       }
-
-      await db.run('INSERT INTO players (id, name, session_id, token, joined_at) VALUES (?, ?, ?, ?, ?)', [
-        player.id,
-        player.name,
-        sessionId,
-        player.tokenHash,
-        now,
-      ]);
-
-      const session = {
-        id: sessionId,
-        name: sessionName,
-        status: 'active',
-        lastActivity: now,
-        hostId: player.id,
-        players: new Map([[player.id, player]]),
-      };
-      sessions.set(sessionId, session);
-
-      res.status(201).json({
-        sessionId,
-        sessionName,
-        playerId: player.id,
-        playerToken: token,
-        expiresAt: expiresAt(session),
-      });
     })
   );
+
+  async function createSession(sessionId, sessionName, playerName) {
+    const existing = await loadSession(sessionId);
+    if (existing && isOpen(existing)) {
+      throw new ApiError(409, 'Esiste già una sessione attiva con questo nome. Scegline un altro.', 'session_exists');
+    }
+    if (existing) {
+      // Il codice di una sessione chiusa può essere riutilizzato
+      await db.run('DELETE FROM players WHERE session_id = ?', [sessionId]);
+      await db.run('DELETE FROM sessions WHERE id = ?', [sessionId]);
+    }
+
+    const now = Date.now();
+    const { player, token } = newPlayer(playerName);
+    try {
+      await db.run(
+        "INSERT INTO sessions (id, name, status, started_at, last_activity, host_id) VALUES (?, ?, 'active', ?, ?, ?)",
+        [sessionId, sessionName, now, now, player.id]
+      );
+    } catch (err) {
+      if (err.code === 'SQLITE_CONSTRAINT') {
+        throw new ApiError(409, 'Esiste già una sessione attiva con questo nome. Scegline un altro.', 'session_exists');
+      }
+      throw err;
+    }
+
+    await db.run('INSERT INTO players (id, name, session_id, token, joined_at) VALUES (?, ?, ?, ?, ?)', [
+      player.id,
+      player.name,
+      sessionId,
+      player.tokenHash,
+      now,
+    ]);
+
+    const session = {
+      id: sessionId,
+      name: sessionName,
+      status: 'active',
+      startedAt: now,
+      lastActivity: now,
+      hostId: player.id,
+      kickedNames: new Set(),
+      players: new Map([[player.id, player]]),
+    };
+    sessions.set(sessionId, session);
+
+    return {
+      sessionId,
+      sessionName,
+      playerId: player.id,
+      playerToken: token,
+      startedAt: now,
+      expiresAt: expiresAt(session),
+    };
+  }
 
   app.post(
     '/api/sessions/join',
@@ -421,6 +469,9 @@ function createServer(options = {}) {
       if (!isOpen(session)) throw new ApiError(410, 'La sessione è terminata o scaduta', 'session_closed');
 
       const lower = playerName.toLowerCase();
+      if (session.kickedNames.has(lower)) {
+        throw new ApiError(403, 'Chi ha creato la partita ti ha rimosso: non puoi rientrare', 'kicked');
+      }
       if ([...session.players.values()].some((p) => p.name.toLowerCase() === lower)) {
         throw new ApiError(409, 'Nome già in uso in questa sessione', 'name_taken');
       }
@@ -452,6 +503,7 @@ function createServer(options = {}) {
         sessionName: session.name,
         playerId: player.id,
         playerToken: token,
+        startedAt: session.startedAt,
         expiresAt: expiresAt(session),
       });
     })
@@ -459,6 +511,7 @@ function createServer(options = {}) {
 
   app.get(
     '/api/sessions/:sessionId/info',
+    readLimiter,
     asyncRoute(async (req, res) => {
       const sessionId = normalizeSessionId(req.params.sessionId);
       const session = SESSION_ID_RE.test(sessionId) ? await loadSession(sessionId) : null;
@@ -469,6 +522,7 @@ function createServer(options = {}) {
 
   app.get(
     '/join/:sessionId',
+    readLimiter,
     asyncRoute(async (req, res) => {
       const sessionId = normalizeSessionId(req.params.sessionId);
       const session = SESSION_ID_RE.test(sessionId) ? await loadSession(sessionId) : null;
@@ -567,8 +621,26 @@ function createServer(options = {}) {
     };
   }
 
+  // IP del client: dietro nginx (proxy su loopback, come per Express con "trust proxy") si usa
+  // l'ultimo indirizzo non locale di X-Forwarded-For
+  function socketClientIp(socket) {
+    const address = socket.handshake.address || '';
+    const forwarded = socket.handshake.headers['x-forwarded-for'];
+    const trusted = config.trustProxy && config.trustProxy !== 'false';
+    if (!trusted || !LOOPBACK_RE.test(address) || typeof forwarded !== 'string') return address;
+    const hops = forwarded
+      .split(',')
+      .map((h) => h.trim())
+      .filter(Boolean);
+    for (let i = hops.length - 1; i >= 0; i--) {
+      if (!LOOPBACK_RE.test(hops[i])) return hops[i];
+    }
+    return address;
+  }
+
   io.on('connection', (socket) => {
     socket.data.pieceHits = [];
+    const clientIp = socketClientIp(socket);
 
     const currentContext = () => {
       const { sessionId, playerId } = socket.data;
@@ -599,6 +671,9 @@ function createServer(options = {}) {
         const sessionId = normalizeSessionId(rawSessionId);
         if (!SESSION_ID_RE.test(sessionId) || typeof playerId !== 'string') {
           return ack({ ok: false, code: 'bad_request', error: 'Dati non validi' });
+        }
+        if (!socketJoinLimiter.allow(clientIp)) {
+          return ack({ ok: false, code: 'rate_limited', error: 'Troppe richieste, riprova tra poco' });
         }
         const session = await loadSession(sessionId);
         if (!session) return ack({ ok: false, code: 'not_found', error: 'Sessione non trovata' });
@@ -696,8 +771,15 @@ function createServer(options = {}) {
         const target = session.players.get(targetId);
         if (!target) return ack({ ok: false, code: 'not_found', error: 'Giocatore non trovato' });
 
+        // Il nome rimosso non può rientrare nella stessa partita
+        const kickedNames = new Set(session.kickedNames).add(target.name.toLowerCase());
         await withPlayerLock(target, async () => {
+          await db.run('UPDATE sessions SET kicked_names = ? WHERE id = ?', [
+            JSON.stringify([...kickedNames]),
+            session.id,
+          ]);
           await db.run('DELETE FROM players WHERE id = ?', [target.id]);
+          session.kickedNames = kickedNames;
           session.players.delete(target.id);
         });
         // I dispositivi del giocatore rimosso escono dalla stanza e vengono avvisati
