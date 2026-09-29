@@ -34,6 +34,20 @@ Account, email, telefono, posizione, contatti, foto/file, audio (il permesso mic
 
 Nessun SDK di terze parti che invia dati (niente analytics, pubblicità o crash reporting). Le librerie incluse (Expo, React Native, Socket.IO) non effettuano chiamate verso servizi esterni nell'app di produzione. Nessun dato è condiviso con terze parti.
 
+### Autorizzazioni Android
+
+Autorizzazioni dichiarate dal bundle di produzione 1.6.0 (`com.stevatero.sushistreakapp`, versionCode 5), come riportate dalla Play Console:
+
+| Autorizzazione                                                          | Origine                                  | Note                                                           |
+| ----------------------------------------------------------------------- | ---------------------------------------- | -------------------------------------------------------------- |
+| `android.permission.INTERNET`                                           | App                                      | Comunicazione con il server (HTTPS/WSS)                        |
+| `android.permission.ACCESS_NETWORK_STATE`                               | App                                      | Stato della connessione e riconnessione automatica             |
+| `android.permission.WAKE_LOCK`                                          | Libreria nativa (riproduzione audio)     | Normale; da non bloccare, il player può usarla durante i suoni |
+| `com.android.vending.CHECK_LICENSE`                                     | Libreria Google/Expo inclusa nella build | Normale; nessun dato personale                                 |
+| `com.stevatero.sushistreakapp.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION` | AndroidX (targetSdk 33+)                 | Interna all'app                                                |
+
+Sono tutte autorizzazioni "normali": Android le concede senza chiedere nulla all'utente e nessuna dà accesso a dati personali, quindi non cambiano le risposte del questionario. Microfono, overlay, storage, vibrazione e servizi in foreground sono esclusi con `blockedPermissions` in `app.config.ts`. Da ricontrollare nella Play Console (App bundle → Autorizzazioni) a ogni aggiornamento delle dipendenze.
+
 ## Risposte proposte per il questionario
 
 | Domanda                                                  | Risposta proposta                                                                                                                                                                  |

@@ -129,7 +129,7 @@ Alla prima build `eas build -p ios` chiede di accedere con l'Apple ID e crea cer
 - [x] Android App Bundle (`buildType: app-bundle`) con R8 e riduzione delle risorse
 - [x] Icona adattiva con contenuto nella safe zone, splash screen, nome dell'app
 - [x] Orientamento portrait, edge-to-edge
-- [x] Permessi minimi (`INTERNET`, `ACCESS_NETWORK_STATE`); microfono, overlay e storage bloccati
+- [x] Permessi minimi: l'app richiede solo `INTERNET` e `ACCESS_NETWORK_STATE`; microfono, overlay, storage, vibrazione e servizi in foreground sono bloccati. Il bundle 1.6.0 ne dichiara 5 in tutto: le altre 3 (`WAKE_LOCK`, `com.android.vending.CHECK_LICENSE`, `<pacchetto>.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`) sono aggiunte dalle librerie Android, sono autorizzazioni normali e non richiedono consenso (dettagli in [DATA_SAFETY.md](DATA_SAFETY.md#autorizzazioni-android))
 - [x] `allowBackup=false`, nessun traffico in chiaro nelle build di rilascio
 - [x] App Links `https://sushi.dietalab.net/join/*` (solo build di produzione)
 - [x] Informativa privacy pubblica: `https://sushi.dietalab.net/privacy`
