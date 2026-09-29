@@ -49,8 +49,8 @@ L'app non è ancora su Google Play né sull'App Store. Su Android per provarla c
 
 | APK                                    | Per chi                              | Link fisso all'ultima build                                                                                                                                |
 | -------------------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Solo arm64 (consigliato, ~29 MB)       | Telefoni Android degli ultimi anni   | [sushi-streak-preview-arm64.apk](https://github.com/Stevatero/sushi-streak-game/releases/download/apk-preview-latest-arm64/sushi-streak-preview-arm64.apk) |
-| Completo (arm64 + armeabi-v7a, ~40 MB) | Anche telefoni meno recenti a 32 bit | [sushi-streak-preview.apk](https://github.com/Stevatero/sushi-streak-game/releases/download/apk-preview-latest/sushi-streak-preview.apk)                   |
+| Solo arm64 (consigliato, ~34 MB)       | Telefoni Android degli ultimi anni   | [sushi-streak-preview-arm64.apk](https://github.com/Stevatero/sushi-streak-game/releases/download/apk-preview-latest-arm64/sushi-streak-preview-arm64.apk) |
+| Completo (arm64 + armeabi-v7a, ~48 MB) | Anche telefoni meno recenti a 32 bit | [sushi-streak-preview.apk](https://github.com/Stevatero/sushi-streak-game/releases/download/apk-preview-latest/sushi-streak-preview.apk)                   |
 
 Le build per versione sono nelle [release](https://github.com/Stevatero/sushi-streak-game/releases) `apk-preview-vX.Y.Z`.
 
