@@ -91,7 +91,7 @@ describe('GameSessionScreen', () => {
   });
 
   it('si collega alla partita e salva la sessione attiva per la ripresa', async () => {
-    renderWithProviders(<GameSessionScreen />);
+    await renderWithProviders(<GameSessionScreen />);
     expect(socketService.joinSession).toHaveBeenCalledWith({ sessionId: 'CENA', playerId: 'p1', token: 'tok' });
     await waitFor(async () =>
       expect(await SessionStorageService.getActiveSession()).toMatchObject({ sessionId: 'CENA', playerToken: 'tok' })
@@ -99,7 +99,7 @@ describe('GameSessionScreen', () => {
   });
 
   it('mostra la classifica con la posizione del giocatore e registra i pezzi', async () => {
-    renderWithProviders(<GameSessionScreen />);
+    await renderWithProviders(<GameSessionScreen />);
     serverEmit('session', snapshot());
     serverEmit('connection', 'connected');
 
@@ -111,7 +111,7 @@ describe('GameSessionScreen', () => {
   });
 
   it('offline non invia pezzi e avvisa il giocatore', async () => {
-    renderWithProviders(<GameSessionScreen />);
+    await renderWithProviders(<GameSessionScreen />);
     serverEmit('session', snapshot());
     serverEmit('connection', 'connecting');
 
@@ -124,7 +124,7 @@ describe('GameSessionScreen', () => {
   it('annulla l’ultimo pezzo con il suono "bop"', async () => {
     const SoundManager = require('../../utils/SoundManager').default;
     const bop = jest.spyOn(SoundManager, 'playUndoSound');
-    renderWithProviders(<GameSessionScreen />);
+    await renderWithProviders(<GameSessionScreen />);
     serverEmit('session', snapshot());
 
     fireEvent.press(screen.getByLabelText('Annulla ultimo'));
@@ -134,7 +134,7 @@ describe('GameSessionScreen', () => {
   });
 
   it('chiede conferma prima di segnare la fine e poi blocca l’aggiunta di pezzi', async () => {
-    renderWithProviders(<GameSessionScreen />);
+    await renderWithProviders(<GameSessionScreen />);
     serverEmit('session', snapshot());
 
     fireEvent.press(screen.getByLabelText('Ho finito!'));
@@ -159,7 +159,7 @@ describe('GameSessionScreen', () => {
   });
 
   it('a fine partita salva automaticamente il risultato nello storico', async () => {
-    renderWithProviders(<GameSessionScreen />);
+    await renderWithProviders(<GameSessionScreen />);
     serverEmit('gameEnded', snapshot('ended', true));
 
     await waitFor(async () => {
@@ -171,7 +171,7 @@ describe('GameSessionScreen', () => {
   });
 
   it('in caso di pareggio proclama tutti i vincitori e li salva nello storico', async () => {
-    renderWithProviders(<GameSessionScreen />);
+    await renderWithProviders(<GameSessionScreen />);
     serverEmit('gameEnded', {
       ...snapshot('ended', true),
       players: [
@@ -188,7 +188,7 @@ describe('GameSessionScreen', () => {
   });
 
   it("l'host può rimuovere un altro giocatore dopo una conferma", async () => {
-    renderWithProviders(<GameSessionScreen />);
+    await renderWithProviders(<GameSessionScreen />);
     serverEmit('session', { ...snapshot(), hostId: 'p1' });
 
     expect(screen.getByText(/tocca un giocatore per rimuoverlo/)).toBeTruthy();
@@ -201,8 +201,8 @@ describe('GameSessionScreen', () => {
     expect(await screen.findByText('Luca è stato rimosso')).toBeTruthy();
   });
 
-  it('chi non è host non può rimuovere nessuno', () => {
-    renderWithProviders(<GameSessionScreen />);
+  it('chi non è host non può rimuovere nessuno', async () => {
+    await renderWithProviders(<GameSessionScreen />);
     serverEmit('session', { ...snapshot(), hostId: 'p2' });
 
     expect(screen.queryByText(/tocca un giocatore per rimuoverlo/)).toBeNull();
@@ -211,7 +211,7 @@ describe('GameSessionScreen', () => {
   });
 
   it('chiede conferma prima di uscire dalla partita', async () => {
-    renderWithProviders(<GameSessionScreen />);
+    await renderWithProviders(<GameSessionScreen />);
     serverEmit('session', snapshot());
 
     const action = { type: 'GO_BACK' };
@@ -226,7 +226,7 @@ describe('GameSessionScreen', () => {
   });
 
   it('se si viene rimossi avvisa e non salva la partita nello storico', async () => {
-    renderWithProviders(<GameSessionScreen />);
+    await renderWithProviders(<GameSessionScreen />);
     serverEmit('session', { ...snapshot(), hostId: 'p2' });
     serverEmit('kicked', { sessionId: 'CENA' });
 

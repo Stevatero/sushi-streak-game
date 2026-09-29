@@ -25,7 +25,7 @@ jest.mock('../../services/api', () => {
 
 // Attende il completamento dei caricamenti asincroni iniziali (nome salvato, sessione attiva)
 const renderHome = async () => {
-  renderWithProviders(<HomeScreen />);
+  await renderWithProviders(<HomeScreen />);
   await act(async () => {});
 };
 
