@@ -4,6 +4,7 @@ import { IconButton, Snackbar } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { plural } from '../utils/plural';
 import { SessionStorageService, SavedSession } from '../services/sessionStorage';
 import { fonts, radii, typography, useAppTheme } from '../theme/theme';
 import { useExclusiveModal } from '../hooks/useExclusiveModal';
@@ -123,7 +124,8 @@ const SessionHistoryScreen = () => {
               <View style={styles.inline}>
                 <Hanko label="勝" size={18} tilt={0} color={colors.gold} />
                 <Text style={[typography.caption, { color: colors.onSurfaceVariant }]} numberOfLines={1}>
-                  {item.winner.name} · {item.winner.score} pezzi · {item.players.length} giocatori
+                  {item.winner.name} · {plural(item.winner.score, 'pezzo', 'pezzi')} ·{' '}
+                  {plural(item.players.length, 'giocatore', 'giocatori')}
                   {item.duration ? ` · ${item.duration}` : ''}
                 </Text>
               </View>
@@ -179,7 +181,7 @@ const SessionHistoryScreen = () => {
             <Panel style={styles.statsPanel}>
               {renderStat(stats.games, stats.games === 1 ? 'partita' : 'partite')}
               <View style={[styles.statDivider, { backgroundColor: colors.outlineVariant }]} />
-              {renderStat(stats.pieces, 'pezzi mangiati')}
+              {renderStat(stats.pieces, stats.pieces === 1 ? 'pezzo mangiato' : 'pezzi mangiati')}
               <View style={[styles.statDivider, { backgroundColor: colors.outlineVariant }]} />
               {renderStat(stats.record, 'record')}
             </Panel>

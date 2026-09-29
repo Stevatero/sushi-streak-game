@@ -17,6 +17,7 @@ import useGameStore, { Player } from '../store/gameStore';
 import SushiStack from '../components/SushiStack';
 import SakuraCelebration from '../components/SakuraCelebration';
 import SoundManager from '../utils/SoundManager';
+import { plural } from '../utils/plural';
 import { SessionStorageService, SavedSession } from '../services/sessionStorage';
 import { shareService } from '../services/shareService';
 import { RESTAURANT_NAME_MAX_LENGTH } from '../config';
@@ -110,8 +111,8 @@ const GameSessionScreen = () => {
     winners.length === 0
       ? 'Nessun pezzo mangiato'
       : winners.length > 1
-        ? `Pareggio tra ${winners.map((p) => p.name).join(' e ')} con ${topScore} pezzi!`
-        : `Vince ${winners[0].name} con ${topScore} pezzi!`;
+        ? `Pareggio tra ${winners.map((p) => p.name).join(' e ')} con ${plural(topScore, 'pezzo', 'pezzi')}!`
+        : `Vince ${winners[0].name} con ${plural(topScore, 'pezzo', 'pezzi')}!`;
   const isOnline = connection === 'connected';
   // Solo con un server che indica l'host (1.3+) si possono rimuovere i giocatori
   const amHost = !!hostId && hostId === playerId;
@@ -502,14 +503,17 @@ const GameSessionScreen = () => {
       {/* Punteggio personale */}
       <View style={styles.hero}>
         <SectionTitle label="I tuoi pezzi" kanji="貫" centered style={styles.heroLabel} />
-        <Text style={[styles.heroScore, { color: colors.onBackground }]} accessibilityLabel={`${myScore} pezzi`}>
+        <Text
+          style={[styles.heroScore, { color: colors.onBackground }]}
+          accessibilityLabel={plural(myScore, 'pezzo', 'pezzi')}
+        >
           {myScore}
         </Text>
         {myRank > 0 ? (
           <View style={styles.heroRank}>
             {renderRankBadge(myRank, 26)}
             <Text style={[typography.bodyStrong, { color: colors.onSurfaceVariant }]}>
-              {`Sei ${myRank}° su ${players.length} · ${myScore} pezzi`}
+              {`Sei ${myRank}° su ${players.length} · ${plural(myScore, 'pezzo', 'pezzi')}`}
             </Text>
           </View>
         ) : null}
@@ -521,7 +525,9 @@ const GameSessionScreen = () => {
           label="Classifica"
           kanji="順位"
           right={
-            <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>{players.length} giocatori</Text>
+            <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>
+              {plural(players.length, 'giocatore', 'giocatori')}
+            </Text>
           }
         />
         <FlatList
@@ -657,7 +663,9 @@ const GameSessionScreen = () => {
                   <Text style={[styles.podiumName, { color: colors.onSurface }]} numberOfLines={1}>
                     {p.name}
                   </Text>
-                  <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>{p.score} pezzi</Text>
+                  <Text style={[typography.caption, { color: colors.onSurfaceVariant }]}>
+                    {plural(p.score, 'pezzo', 'pezzi')}
+                  </Text>
                   <View
                     style={[
                       styles.podiumBlock,
