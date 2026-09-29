@@ -19,6 +19,11 @@ Aggiornamento a Expo SDK 57.
 - iOS: versione minima 16.4 (da 15.1), richiesta dall'SDK; ciclo di vita a scene di UIKit, necessario per le app compilate con l'SDK di iOS 27.
 - Android invariato: API 24–36.
 
+### Documentazione
+
+- Materiale per la scheda Google Play in `docs/play-store/`: testi (`listing.md`), 10 screenshot in tema chiaro e scuro, grafica in primo piano e icona.
+- Nuove immagini dell'interfaccia nel README e nuova immagine social del repository.
+
 ### Corretto
 
 - Home: tolto il timbro 寿司 sovrapposto all'icona dell'app, che dalla 1.5.0 ha già il suo timbro 寿.
