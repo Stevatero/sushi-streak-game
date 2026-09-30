@@ -1,6 +1,6 @@
 {
   "name": "sushi-streak-app",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "private": true,
   "description": "App Android per sfidare gli amici a chi mangia più sushi all-you-can-eat: classifica in tempo reale, pila di sushi animata con fisica sul thread UI e interfaccia in stile giapponese.",
   "main": "index.ts",
