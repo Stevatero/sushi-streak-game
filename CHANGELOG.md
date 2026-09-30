@@ -7,6 +7,8 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 
 ## [Unreleased]
 
+## [1.7.1] - 2026-09-30
+
 ### Modificato
 
 - Su tablet e pieghevoli aperti Android l'app si può usare anche in orizzontale; sui telefoni resta in verticale.
@@ -221,7 +223,8 @@ Prima versione preparata per la pubblicazione sul Google Play Store.
 
 Versione di sviluppo interna, non pubblicata sugli store.
 
-[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.7.0...HEAD
+[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.7.1...HEAD
+[1.7.1]: https://github.com/Stevatero/sushi-streak-game/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.6.1...v1.7.0
 [1.6.1]: https://github.com/Stevatero/sushi-streak-game/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.5.0...v1.6.0
