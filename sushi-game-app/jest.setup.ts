@@ -30,3 +30,9 @@ jest.mock('expo-clipboard', () => ({
   setStringAsync: jest.fn(() => Promise.resolve(true)),
   getStringAsync: jest.fn(() => Promise.resolve('')),
 }));
+
+jest.mock('expo-screen-orientation', () => ({
+  OrientationLock: { PORTRAIT_UP: 2 },
+  lockAsync: jest.fn(() => Promise.resolve()),
+  unlockAsync: jest.fn(() => Promise.resolve()),
+}));

@@ -7,6 +7,10 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 
 ## [Unreleased]
 
+### Modificato
+
+- Su tablet e pieghevoli aperti Android l'app si può usare anche in orizzontale; sui telefoni resta in verticale.
+
 ## [1.7.0] - 2026-09-29
 
 Revisione completa di app e backend: correzioni, sicurezza e affidabilità. Il backend va aggiornato prima

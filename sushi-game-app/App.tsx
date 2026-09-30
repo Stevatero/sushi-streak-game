@@ -16,6 +16,7 @@ import { PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AppNavigator from './src/navigation/AppNavigator';
 import ErrorBoundary from './src/components/ErrorBoundary';
+import { usePhonePortraitLock } from './src/hooks/usePhonePortraitLock';
 import { ThemeProvider, useColorScheme } from './src/theme/ThemeProvider';
 import { preferences } from './src/services/preferences';
 import { logger } from './src/utils/logger';
@@ -63,6 +64,7 @@ const ThemedApp = () => {
 };
 
 export default function App() {
+  usePhonePortraitLock();
   return (
     <ErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>

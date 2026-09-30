@@ -42,6 +42,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   version,
   description:
     "Sfida i tuoi amici e scopri chi è il vero campione di sushi! Un'app per tenere traccia di chi mangia più sushi durante una cena.",
+  // Verticale su iOS (solo iPhone); su Android bloccato durante l'esecuzione solo sui telefoni
   orientation: 'portrait',
   icon: './assets/icon.png',
   userInterfaceStyle: 'automatic',
@@ -112,6 +113,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     ],
     ['expo-audio', { microphonePermission: false, recordAudioAndroid: false }],
     './plugins/withoutUnusedAudioServices',
+    // Nessun blocco di orientamento nel manifest Android: schermi grandi supportati (vedi il plugin)
+    './plugins/withAndroidLargeScreenOrientation',
     // Token della partita nell'archivio sicuro: niente biometria (nessun testo Face ID) e nessuna regola
     // di backup, già disattivato con allowBackup: false
     ['expo-secure-store', { faceIDPermission: false, configureAndroidBackup: false }],
