@@ -53,6 +53,10 @@ La pipeline richiede i secret `EXPO_TOKEN` e `GOOGLE_SERVICE_ACCOUNT_KEY` (vedi 
 
 - Push manuale di un tag `vX.Y.Z`: GitHub Release e build AAB su EAS, **senza** invio al Google Play.
 - Actions → **Release** → _Run workflow_ con un tag esistente e l'opzione "Invia la build al Google Play": utile per ripetere una release fallita.
+- Se la build EAS è riuscita e si è fermato solo l'invio, indica anche **build_id** (l'ID della build, nel log del passo "Build AAB di produzione" o su expo.dev): viene inviata quella build, senza ricompilare né consumare un altro `versionCode`.
+  ```bash
+  gh workflow run release.yml -f tag=v1.7.0 -f build_id=<id-build-eas>
+  ```
 - Da terminale: `npm run build:production`, poi `npm run submit:production` con la chiave in `sushi-game-app/google-service-account.json` (esclusa da git).
 
 **versionCode**: lo gestisce EAS (`appVersionSource: remote` e `autoIncrement` nel profilo `production`) e sale di uno a ogni build di produzione (la 1.6.0 è il 5). Non caricare sul Play Store bundle compilati fuori da EAS: userebbero un altro `versionCode`. Se serve riallinearlo: `npx eas-cli build:version:set -p android`.
@@ -142,7 +146,7 @@ Serve a `eas submit` per caricare i bundle senza interazione. Si configura una v
 1. [Google Cloud Console](https://console.cloud.google.com/): crea (o scegli) un progetto e attiva la **Google Play Android Developer API** (API e servizi → Libreria).
 2. IAM e amministrazione → **Account di servizio** → _Crea account di servizio_ (es. `eas-submit`), senza ruoli sul progetto. Poi apri l'account → **Chiavi** → _Aggiungi chiave_ → _Crea nuova chiave_ → **JSON**: si scarica il file della chiave.
 3. [Play Console](https://play.google.com/console) → **Utenti e autorizzazioni** → _Invita nuovi utenti_ → email dell'account di servizio (`…@….iam.gserviceaccount.com`) → **Autorizzazioni app**: aggiungi Sushi Streak con _Rilascia app sui canali di test_ (e, se vuoi promuovere in produzione dalla CI, _Rilascia in produzione…_) → _Invita utente_.
-4. Salva la chiave come secret dell'ambiente `production`, poi cancella il file scaricato:
+4. Salva **il contenuto del file JSON** (inizia con `{"type": "service_account", ...`) come secret dell'ambiente `production`, poi cancella il file scaricato. Non usare una chiave API (`AIza…`): la release si ferma con un errore prima della build.
    ```bash
    gh secret set GOOGLE_SERVICE_ACCOUNT_KEY --env production < percorso/della/chiave.json
    ```
