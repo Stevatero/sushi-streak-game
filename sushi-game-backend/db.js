@@ -72,9 +72,27 @@ async function migrate(db) {
   // v1.7: inizio della partita (distingue partite diverse con lo stesso codice) e nomi rimossi dall'host
   await addColumnIfMissing(db, 'sessions', 'started_at', 'INTEGER');
   await addColumnIfMissing(db, 'sessions', 'kicked_names', 'TEXT');
+  // v1.8: ultimo pezzo numerato applicato per giocatore (niente doppioni) e chi ha chiuso la partita
+  await addColumnIfMissing(db, 'players', 'last_seq', 'INTEGER NOT NULL DEFAULT 0');
+  await addColumnIfMissing(db, 'sessions', 'closed_by', 'TEXT');
+
+  // v1.8: segnalazioni di errore inviate dall'app con il consenso dell'utente (nessun dato del giocatore)
+  await db.run(`CREATE TABLE IF NOT EXISTS crash_reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    received_at INTEGER NOT NULL,
+    app_version TEXT,
+    platform TEXT,
+    os_version TEXT,
+    name TEXT,
+    message TEXT,
+    stack TEXT,
+    context TEXT,
+    fatal INTEGER NOT NULL DEFAULT 0
+  )`);
 
   await db.run('CREATE INDEX IF NOT EXISTS idx_players_session ON players (session_id)');
   await db.run('CREATE INDEX IF NOT EXISTS idx_sessions_status ON sessions (status, last_activity)');
+  await db.run('CREATE INDEX IF NOT EXISTS idx_crash_reports_received ON crash_reports (received_at)');
 
   // Le sessioni create prima della migrazione non hanno last_activity: le consideriamo scadute
   await db.run(

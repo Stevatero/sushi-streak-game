@@ -49,6 +49,40 @@ function connect() {
 }
 
 const emit = (socket, event, payload) => new Promise((resolve) => socket.emit(event, payload, resolve));
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// Server separato con una configurazione dedicata (database proprio), chiuso alla fine del test
+async function withServer(options, fn) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sushi-extra-'));
+  const server = createServer({ dbPath: path.join(dir, 'test.db'), ...options });
+  const url = `http://127.0.0.1:${await server.start(0)}`;
+  const sockets = [];
+  const helpers = {
+    url,
+    server,
+    dbPath: path.join(dir, 'test.db'),
+    post: async (pathname, body, headers = {}) => {
+      const res = await fetch(`${url}${pathname}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...headers },
+        body: JSON.stringify(body),
+      });
+      return { status: res.status, body: await res.json() };
+    },
+    connect: () => {
+      const socket = ioClient(url, { transports: ['websocket'], forceNew: true });
+      sockets.push(socket);
+      return new Promise((resolve) => socket.on('connect', () => resolve(socket)));
+    },
+  };
+  try {
+    return await fn(helpers);
+  } finally {
+    sockets.forEach((s) => s.disconnect());
+    await server.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+}
 
 test('crea una sessione e restituisce un token', async () => {
   const res = await post('/api/sessions', { sessionName: 'test-1', playerName: 'Anna' });
@@ -191,6 +225,8 @@ test('la pagina privacy è pubblica e riporta i tempi di conservazione configura
   assert.equal(res.status, 200);
   assert.ok(html.includes('Informativa sulla privacy'));
   assert.ok(html.includes('dopo 30 giorni'));
+  assert.ok(html.includes('Segnalazioni di errore (facoltative)'));
+  assert.ok(html.includes('disattivate di default'));
 });
 
 test('tocchi ravvicinati non perdono punti e il database resta allineato', async () => {
@@ -420,5 +456,229 @@ test('le letture pubbliche e gli ingressi via socket hanno un limite di frequenz
     );
   } finally {
     await limited.close();
+  }
+});
+
+test('i pezzi numerati non vengono contati due volte, anche dopo un riavvio', async () => {
+  const host = (await post('/api/sessions', { sessionName: 'SEQ', playerName: 'Anna' })).body;
+  const socket = await connect();
+  const joined = await emit(socket, 'join_session', {
+    sessionId: 'SEQ',
+    playerId: host.playerId,
+    token: host.playerToken,
+  });
+  assert.equal(joined.lastSeq, 0);
+  assert.ok(joined.features.includes('piece_seq'));
+  assert.ok(joined.features.includes('end_session'));
+
+  assert.deepEqual(await emit(socket, 'add_piece', { seq: 1 }), { ok: true, score: 1, lastSeq: 1 });
+  // Stesso pezzo rinviato (es. dopo un timeout): non cambia il punteggio
+  const again = await emit(socket, 'add_piece', { seq: 1 });
+  assert.equal(again.ok, true);
+  assert.equal(again.duplicate, true);
+  assert.equal(again.score, 1);
+  assert.equal((await emit(socket, 'add_piece', { seq: 2 })).score, 2);
+  assert.equal((await emit(socket, 'remove_piece', { seq: 3 })).score, 1);
+  assert.equal((await emit(socket, 'add_piece', { seq: 'x' })).code, 'bad_request');
+  assert.equal((await emit(socket, 'add_piece', { seq: -1 })).code, 'bad_request');
+
+  // Dopo un riavvio il numero dell'ultimo pezzo viene riletto dal database
+  instance.sessions.clear();
+  const rejoined = await emit(socket, 'join_session', {
+    sessionId: 'SEQ',
+    playerId: host.playerId,
+    token: host.playerToken,
+  });
+  assert.equal(rejoined.lastSeq, 3);
+  assert.equal(rejoined.session.players[0].seq, 3);
+  assert.equal((await emit(socket, 'add_piece', { seq: 3 })).duplicate, true);
+  assert.equal((await emit(socket, 'add_piece', { seq: 4 })).score, 2);
+  // Le app precedenti (senza numero) continuano a funzionare. Nuovo socket: il limite è di 6 pezzi al secondo
+  const legacy = await connect();
+  await emit(legacy, 'join_session', { sessionId: 'SEQ', playerId: host.playerId, token: host.playerToken });
+  assert.equal((await emit(legacy, 'add_piece')).score, 3);
+});
+
+test("l'host termina la partita per tutti, gli altri no", async () => {
+  const host = (await post('/api/sessions', { sessionName: 'STOP', playerName: 'Host' })).body;
+  const guest = (await post('/api/sessions/join', { sessionId: 'STOP', playerName: 'Lento' })).body;
+  const hostSocket = await connect();
+  const guestSocket = await connect();
+  await emit(hostSocket, 'join_session', { sessionId: 'STOP', playerId: host.playerId, token: host.playerToken });
+  await emit(guestSocket, 'join_session', { sessionId: 'STOP', playerId: guest.playerId, token: guest.playerToken });
+  await emit(guestSocket, 'add_piece', { seq: 1 });
+
+  assert.equal((await emit(guestSocket, 'end_session')).code, 'forbidden');
+
+  const ended = new Promise((resolve) => guestSocket.on('game_ended', resolve));
+  assert.equal((await emit(hostSocket, 'end_session')).ok, true);
+  const session = await ended;
+  assert.equal(session.status, 'ended');
+  assert.equal(session.closedBy, 'host');
+  assert.ok(session.players.every((p) => p.finished));
+  assert.equal(session.players.find((p) => p.id === guest.playerId).score, 1);
+  assert.equal((await emit(guestSocket, 'add_piece', { seq: 2 })).ok, false);
+
+  // Dopo un riavvio la partita resta chiusa dall'host
+  instance.sessions.clear();
+  const info = await (await fetch(`${baseUrl}/api/sessions/STOP/info`)).json();
+  assert.equal(info.status, 'ended');
+  const rejoined = await emit(hostSocket, 'join_session', {
+    sessionId: 'STOP',
+    playerId: host.playerId,
+    token: host.playerToken,
+  });
+  assert.equal(rejoined.session.closedBy, 'host');
+});
+
+test('una partita ferma si chiude da sola solo se almeno metà dei giocatori ha finito', async () => {
+  await withServer({ autoEndIdleMs: 80 }, async ({ server, post: postTo, connect: connectTo }) => {
+    const host = (await postTo('/api/sessions', { sessionName: 'IDLE', playerName: 'Host' })).body;
+    const guest = (await postTo('/api/sessions/join', { sessionId: 'IDLE', playerName: 'Ospite' })).body;
+    const socket = await connectTo();
+    await emit(socket, 'join_session', { sessionId: 'IDLE', playerId: host.playerId, token: host.playerToken });
+
+    // Nessuno ha finito: la partita resta aperta anche se ferma
+    await wait(100);
+    await server.sweep();
+    assert.equal(server.sessions.get('IDLE').status, 'active');
+
+    await emit(socket, 'player_finished');
+    await server.sweep();
+    assert.equal(server.sessions.get('IDLE').status, 'active', 'appena finito: non è ancora ferma');
+
+    const ended = new Promise((resolve) => socket.on('game_ended', resolve));
+    await wait(100);
+    await server.sweep();
+    const session = await ended;
+    assert.equal(session.closedBy, 'auto');
+    assert.ok(session.players.find((p) => p.id === guest.playerId).finished);
+  });
+});
+
+test("se l'host è assente il ruolo passa al primo giocatore connesso", async () => {
+  await withServer({ hostTransferMs: 80 }, async ({ server, post: postTo, connect: connectTo }) => {
+    const host = (await postTo('/api/sessions', { sessionName: 'AWAY', playerName: 'Host' })).body;
+    const guest = (await postTo('/api/sessions/join', { sessionId: 'AWAY', playerName: 'Ospite' })).body;
+    const hostSocket = await connectTo();
+    const guestSocket = await connectTo();
+    await emit(hostSocket, 'join_session', { sessionId: 'AWAY', playerId: host.playerId, token: host.playerToken });
+    await emit(guestSocket, 'join_session', { sessionId: 'AWAY', playerId: guest.playerId, token: guest.playerToken });
+
+    // Host connesso: nessun passaggio
+    await wait(100);
+    await server.sweep();
+    assert.equal(server.sessions.get('AWAY').hostId, host.playerId);
+
+    hostSocket.disconnect();
+    await wait(30);
+    await server.sweep();
+    assert.equal(server.sessions.get('AWAY').hostId, host.playerId, "l'assenza è ancora breve");
+
+    const update = new Promise((resolve) => guestSocket.on('session_update', resolve));
+    await wait(100);
+    await server.sweep();
+    assert.equal((await update).hostId, guest.playerId);
+    // Il nuovo host può terminare la partita
+    assert.equal((await emit(guestSocket, 'end_session')).ok, true);
+  });
+});
+
+test('con una versione minima le app precedenti vengono invitate ad aggiornare', async () => {
+  await withServer({ minAppVersion: '1.8.0' }, async ({ url, post: postTo, connect: connectTo }) => {
+    const old = await postTo('/api/sessions', { sessionName: 'OLD', playerName: 'Anna' });
+    assert.equal(old.status, 426);
+    assert.equal(old.body.code, 'upgrade_required');
+    assert.equal(
+      (await postTo('/api/sessions', { sessionName: 'OLD', playerName: 'Anna' }, { 'X-App-Version': '1.7.9' })).status,
+      426
+    );
+
+    const created = await postTo(
+      '/api/sessions',
+      { sessionName: 'NEW', playerName: 'Anna' },
+      { 'X-App-Version': '1.8.0' }
+    );
+    assert.equal(created.status, 201);
+    const socket = await connectTo();
+    const credentials = { sessionId: 'NEW', playerId: created.body.playerId, token: created.body.playerToken };
+    assert.equal((await emit(socket, 'join_session', credentials)).code, 'upgrade_required');
+    assert.equal((await emit(socket, 'join_session', { ...credentials, appVersion: '1.10.0' })).ok, true);
+
+    const health = await (await fetch(`${url}/api/health`)).json();
+    assert.equal(health.minAppVersion, '1.8.0');
+  });
+  // Senza versione minima tutte le app sono accettate (default)
+  assert.equal((await post('/api/sessions', { sessionName: 'ANY-APP', playerName: 'Anna' })).status, 201);
+});
+
+test("le segnalazioni di errore dell'app vengono salvate, limitate e cancellate dopo la conservazione", async () => {
+  await withServer(
+    { crashReportRateLimit: { max: 2, windowMs: 60 * 1000 }, crashRetentionMs: 50 },
+    async ({ server, dbPath, post: postTo }) => {
+      const report = {
+        appVersion: '1.8.0',
+        platform: 'android',
+        osVersion: '36',
+        name: 'TypeError',
+        message: 'Cannot read property x of undefined',
+        stack: 'at foo (index.bundle:1:2)\n'.repeat(100),
+        fatal: true,
+      };
+      assert.equal((await postTo('/api/crash-reports', report)).status, 202);
+      assert.equal((await postTo('/api/crash-reports', { platform: 'ios' })).status, 400);
+      assert.equal((await postTo('/api/crash-reports', report)).status, 429);
+
+      const readReports = () =>
+        execFileSync(process.execPath, [path.join(__dirname, '..', 'scripts', 'crash-reports.js')], {
+          env: { ...process.env, DB_PATH: dbPath, ENV_FILE: path.join(path.dirname(dbPath), 'nessun.env') },
+          encoding: 'utf8',
+        });
+      const output = readReports();
+      assert.match(output, /app 1\.8\.0 · android 36 · FATALE/);
+      assert.match(output, /TypeError: Cannot read property x of undefined/);
+
+      await wait(80);
+      await server.sweep();
+      assert.match(readReports(), /Nessuna segnalazione/);
+    }
+  );
+});
+
+test("l'ultima attività viene salvata alla chiusura anche se il salvataggio è differito", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sushi-flush-'));
+  const dbPath = path.join(dir, 'test.db');
+  const server = createServer({ dbPath, activityPersistMs: 60 * 60 * 1000 });
+  const url = `http://127.0.0.1:${await server.start(0)}`;
+  const { openDatabase } = require('../db');
+  const lastActivity = async () => {
+    const db = openDatabase(dbPath);
+    try {
+      return (await db.get('SELECT last_activity FROM sessions WHERE id = ?', ['FLUSH'])).last_activity;
+    } finally {
+      await db.close();
+    }
+  };
+  try {
+    const res = await fetch(`${url}/api/sessions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionName: 'FLUSH', playerName: 'Anna' }),
+    });
+    const host = await res.json();
+    const socket = ioClient(url, { transports: ['websocket'], forceNew: true });
+    clients.push(socket);
+    await new Promise((resolve) => socket.on('connect', resolve));
+    await emit(socket, 'join_session', { sessionId: 'FLUSH', playerId: host.playerId, token: host.playerToken });
+    await wait(20);
+    const pieceAt = Date.now();
+    assert.equal((await emit(socket, 'add_piece', { seq: 1 })).score, 1);
+    assert.ok((await lastActivity()) < pieceAt, "il pezzo non scrive subito l'attività");
+
+    socket.disconnect();
+    await server.close();
+    assert.ok((await lastActivity()) >= pieceAt, "la chiusura salva l'ultima attività");
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
   }
 });
