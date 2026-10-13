@@ -21,7 +21,21 @@ npm run check          # lint + typecheck + formattazione + test
 cd sushi-game-backend
 npm ci
 npm run lint && npm run format:check && npm test
+npm run test:coverage  # test con copertura (come in CI)
 ```
+
+### Test end-to-end (Maestro)
+
+I flussi in `sushi-game-app/e2e/flows` (partita da soli, ingresso con il link, chiusura da parte dell'host, pezzi registrati offline) girano su un emulatore Android contro un backend locale. In CI: etichetta **`e2e`** sulla pull request o Actions → **E2E Android** → _Run workflow_.
+
+In locale servono un emulatore Android, [Maestro](https://maestro.mobile.dev) e un APK della variante `preview` compilato con il backend del PC (`EXPO_PUBLIC_API_URL=http://10.0.2.2:3000` e `E2E_CLEARTEXT=1`, che abilita l'http solo in quella build):
+
+```bash
+cd sushi-game-backend && npm run dev                       # backend su http://localhost:3000
+cd sushi-game-app && maestro test e2e/flows                # con l'APK già installato sull'emulatore
+```
+
+I controlli usano i `testID` (`player-name`, `session-code`, `join-code`, `add-piece`, `undo-piece`, `finish-game`, `my-score`…): mantienili quando modifichi le schermate.
 
 ## Convenzioni
 
