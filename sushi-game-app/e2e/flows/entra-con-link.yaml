@@ -1,0 +1,36 @@
+# Invito: il link apre l'app con il codice già inserito e si entra nella partita di un altro
+appId: com.stevatero.sushistreakapp.preview
+name: Ingresso con il link di invito
+env:
+  BACKEND_URL: http://localhost:3000
+---
+- runScript:
+    file: ../scripts/api.js
+    env:
+      ACTION: create
+      SESSION: E2E-LINK
+      NAME: Host
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: Crea partita
+    timeout: 30000
+- openLink: sushi-streak-preview://join/E2E-LINK
+- extendedWaitUntil:
+    visible: Entra in partita
+    timeout: 15000
+- assertVisible:
+    id: join-code
+    text: E2E-LINK
+- tapOn:
+    id: player-name
+- inputText: Ospite
+- hideKeyboard
+- tapOn: Entra in partita
+- extendedWaitUntil:
+    visible: 'Online.*'
+    timeout: 30000
+- assertVisible: 'Ospite \(tu\)'
+- assertVisible: Host
+# Solo chi gestisce la partita può terminarla
+- assertNotVisible: Termina la partita per tutti

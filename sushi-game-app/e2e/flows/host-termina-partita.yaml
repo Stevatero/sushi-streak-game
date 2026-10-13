@@ -1,0 +1,43 @@
+# Chi gestisce la partita la chiude per tutti, anche se un giocatore non ha toccato "Ho finito"
+appId: com.stevatero.sushistreakapp.preview
+name: L'host termina la partita
+env:
+  BACKEND_URL: http://localhost:3000
+---
+- runFlow:
+    file: ../subflows/crea-partita.yaml
+    env:
+      NAME: Host
+      SESSION: E2E-END
+# Un secondo giocatore entra dal server (non tocca mai "Ho finito")
+- runScript:
+    file: ../scripts/api.js
+    env:
+      ACTION: join
+      SESSION: E2E-END
+      NAME: Ospite
+- extendedWaitUntil:
+    visible: Ospite
+    timeout: 15000
+- tapOn:
+    id: add-piece
+- assertVisible:
+    id: my-score
+    text: '1'
+
+- tapOn: Termina la partita per tutti
+- assertVisible: Terminare la partita per tutti?
+- assertVisible: '1 giocatore non ha ancora finito.*'
+- tapOn: Termina la partita
+- extendedWaitUntil:
+    visible: Classifica finale
+    timeout: 20000
+- assertVisible: Chiusa da chi gestiva la partita.
+- assertVisible: Vince Host con 1 pezzo!
+
+- runScript:
+    file: ../scripts/api.js
+    env:
+      ACTION: info
+      SESSION: E2E-END
+- assertTrue: ${output.session.status == 'ended' && output.session.allFinished}

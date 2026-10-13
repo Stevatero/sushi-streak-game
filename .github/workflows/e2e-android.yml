@@ -1,0 +1,126 @@
+name: E2E Android
+
+# Test end-to-end con Maestro su un emulatore Android, contro un backend locale avviato nel job:
+# partita da soli, ingresso con il link di invito, chiusura da parte dell'host, pezzi registrati offline.
+# Flussi in sushi-game-app/e2e (vedi CONTRIBUTING.md).
+#
+# Avvio: Actions → "E2E Android" → Run workflow, oppure etichetta "e2e" su una pull request (i test
+# ripartono a ogni nuovo commit della PR finché l'etichetta resta).
+#
+# L'APK è la variante preview per x86_64, con il backend all'indirizzo dell'host visto dall'emulatore
+# (10.0.2.2) in http: E2E_CLEARTEXT abilita il traffico in chiaro solo in questa build.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [labeled, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-android-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  APP_VARIANT: preview
+  # Versione fissa di Maestro (https://github.com/mobile-dev-inc/maestro/releases)
+  MAESTRO_VERSION: 2.10.0
+  E2E_BACKEND: http://10.0.2.2:3000
+
+jobs:
+  e2e:
+    name: Maestro su emulatore
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'e2e')
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            sushi-game-backend/package-lock.json
+            sushi-game-app/package-lock.json
+
+      - name: Backend locale
+        working-directory: sushi-game-backend
+        env:
+          PORT: 3000
+          HOST: 0.0.0.0
+          DB_PATH: ${{ runner.temp }}/e2e.db
+          LOG_LEVEL: info
+        run: |
+          npm ci --omit=dev
+          nohup node server.js > "$RUNNER_TEMP/backend.log" 2>&1 &
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:3000/api/health && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/backend.log"
+          exit 1
+
+      - name: Dipendenze dell'app
+        working-directory: sushi-game-app
+        run: |
+          npm ci
+          node scripts/configure-build-variant.js
+
+      - name: Genera il progetto Android
+        working-directory: sushi-game-app
+        env:
+          E2E_CLEARTEXT: '1'
+        run: npx expo prebuild --platform android --no-install
+
+      # Il bundle JavaScript viene creato qui: gli indirizzi del backend vanno passati a questo passo
+      - name: Compila l'APK (x86_64)
+        working-directory: sushi-game-app/android
+        env:
+          E2E_CLEARTEXT: '1'
+          EXPO_PUBLIC_API_URL: ${{ env.E2E_BACKEND }}
+          EXPO_PUBLIC_PUBLIC_URL: ${{ env.E2E_BACKEND }}
+        run: |
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          ./gradlew assembleRelease --no-daemon \
+            -PreactNativeArchitectures=x86_64 \
+            -Dorg.gradle.jvmargs="-Xmx6g -XX:MaxMetaspaceSize=1g"
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/sushi-streak-e2e.apk"
+
+      - name: Installa Maestro
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/maestro.zip" \
+            "https://github.com/mobile-dev-inc/maestro/releases/download/cli-${MAESTRO_VERSION}/maestro.zip"
+          unzip -q "$RUNNER_TEMP/maestro.zip" -d "$HOME"
+          echo "$HOME/maestro/bin" >> "$GITHUB_PATH"
+
+      - name: Abilita KVM per l'emulatore
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Test sull'emulatore
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            adb install -r "$RUNNER_TEMP/sushi-streak-e2e.apk"
+            maestro test sushi-game-app/e2e/flows --format junit --output "$RUNNER_TEMP/maestro-report.xml" --debug-output "$RUNNER_TEMP/maestro-debug"
+
+      - name: Risultati e log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-android
+          path: |
+            ${{ runner.temp }}/maestro-report.xml
+            ${{ runner.temp }}/maestro-debug
+            ${{ runner.temp }}/backend.log
+          retention-days: 14
+          if-no-files-found: ignore
