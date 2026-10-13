@@ -183,4 +183,24 @@ describe('HomeScreen', () => {
     expect(screen.getByText(/Riprova/)).toBeTruthy();
     expect(mockNavigate).not.toHaveBeenCalled();
   });
+
+  it('segnala i codici scelti a mano troppo corti', async () => {
+    await renderHome();
+    fireEvent.changeText(screen.getByLabelText('Codice della sessione'), 'abc');
+    expect(screen.getByText(/Codice corto/)).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText('Codice della sessione'), 'cena-sakura');
+    expect(screen.queryByText(/Codice corto/)).toBeNull();
+  });
+
+  it("se il server richiede un'app più recente propone di aggiornarla", async () => {
+    (api.createSession as jest.Mock).mockRejectedValueOnce(
+      new ApiError("È disponibile una nuova versione di Sushi Streak: aggiorna l'app.", 426, 'upgrade_required')
+    );
+    await renderHome();
+    fireEvent.changeText(screen.getByLabelText('Il tuo nome'), 'Anna');
+    fireEvent.press(screen.getByText('Crea partita'));
+    expect(await screen.findByText(/nuova versione di Sushi Streak/)).toBeTruthy();
+    expect(screen.getByText("Aggiorna l'app")).toBeTruthy();
+    expect(screen.queryByText(/Riprova/)).toBeNull();
+  });
 });

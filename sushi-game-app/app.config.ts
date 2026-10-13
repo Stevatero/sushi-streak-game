@@ -33,6 +33,9 @@ const variantConfig = {
 
 const applicationId = `${BASE_ID}${variantConfig.idSuffix}`;
 const versionCode = Number(process.env.ANDROID_VERSION_CODE) || undefined;
+// Solo per i test end-to-end (workflow "E2E Android"): l'APK parla con un backend locale in http.
+// Le build di rilascio non lo impostano e restano solo HTTPS
+const allowCleartextForE2E = process.env.E2E_CLEARTEXT === '1';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -128,6 +131,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
           // R8: offuscamento e riduzione del codice; rimozione delle risorse inutilizzate
           enableMinifyInReleaseBuilds: true,
           enableShrinkResourcesInReleaseBuilds: true,
+          ...(allowCleartextForE2E ? { usesCleartextTraffic: true } : {}),
         },
         ios: {
           // Ciclo di vita a scene di UIKit: senza, le app compilate con l'SDK di iOS 27 non si avviano su iOS 27

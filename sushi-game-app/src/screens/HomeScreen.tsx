@@ -18,7 +18,13 @@ import { shareService } from '../services/shareService';
 import { SessionStorageService, ActiveSession, buildSavedSession } from '../services/sessionStorage';
 import { api, ApiError, SessionInfo } from '../services/api';
 import { preferences } from '../services/preferences';
-import { PLAYER_NAME_MAX_LENGTH, SESSION_CODE_MAX_LENGTH, SESSION_CODE_MIN_LENGTH } from '../config';
+import {
+  PLAYER_NAME_MAX_LENGTH,
+  SESSION_CODE_MAX_LENGTH,
+  SESSION_CODE_MIN_LENGTH,
+  SESSION_CODE_SAFE_LENGTH,
+} from '../config';
+import { openAppStore } from '../utils/appStore';
 import { extractSessionCode, generateSessionCode, isValidSessionCode, sanitizeSessionCode } from '../utils/sessionCode';
 import type { RootNavigationProp } from '../navigation/types';
 import { fonts, radii, typography, useAppTheme } from '../theme/theme';
@@ -69,6 +75,8 @@ const HomeScreen = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [retryAction, setRetryAction] = useState<PendingAction>(null);
+  // Il server richiede una versione più recente dell'app
+  const [upgradeRequired, setUpgradeRequired] = useState(false);
   const [activeSession, setActiveSession] = useState<ActiveSession | null>(null);
   const [expiredSession, setExpiredSession] = useState<ActiveSession | null>(null);
   // Blocca i doppi tocchi prima che lo stato "loading" venga applicato
@@ -146,10 +154,13 @@ const HomeScreen = () => {
   const trimmedPlayerName = playerName.trim();
   const canCreate = isValidSessionCode(sessionName) && trimmedPlayerName.length > 0;
   const canJoin = isValidSessionCode(sessionToJoin) && trimmedPlayerName.length > 0;
+  // Un codice scelto a mano molto corto è facile da indovinare da chi è seduto agli altri tavoli
+  const shortCode = isValidSessionCode(sessionName) && sessionName.replace(/-/g, '').length < SESSION_CODE_SAFE_LENGTH;
 
   const handleRequestError = (err: unknown, action: PendingAction) => {
     setError(err instanceof Error ? err.message : 'Si è verificato un errore');
     setRetryAction(err instanceof ApiError && err.isNetworkError ? action : null);
+    setUpgradeRequired(err instanceof ApiError && err.isUpgradeRequired);
   };
 
   const createSession = async () => {
@@ -240,6 +251,7 @@ const HomeScreen = () => {
     setMode(next);
     setError('');
     setRetryAction(null);
+    setUpgradeRequired(false);
   };
 
   const renderTab = (value: Mode, label: string, kanji: string) => {
@@ -308,6 +320,15 @@ const HomeScreen = () => {
                   style={styles.retry}
                 />
               ) : null}
+              {upgradeRequired ? (
+                <AppButton
+                  label="Aggiorna l'app"
+                  icon="download"
+                  variant="outline"
+                  onPress={() => openAppStore()}
+                  style={styles.retry}
+                />
+              ) : null}
             </View>
           ) : null}
 
@@ -369,6 +390,7 @@ const HomeScreen = () => {
               onChangeText={setPlayerName}
               maxLength={PLAYER_NAME_MAX_LENGTH}
               autoCapitalize="words"
+              testID="player-name"
               returnKeyType="next"
             />
 
@@ -384,7 +406,12 @@ const HomeScreen = () => {
                   maxLength={SESSION_CODE_MAX_LENGTH}
                   onSubmitEditing={createSession}
                   returnKeyType="go"
-                  hint={`${SESSION_CODE_MIN_LENGTH}-${SESSION_CODE_MAX_LENGTH} caratteri: lettere, numeri e trattino`}
+                  testID="session-code"
+                  hint={
+                    shortCode
+                      ? `Codice corto: chi è agli altri tavoli potrebbe indovinarlo. Meglio almeno ${SESSION_CODE_SAFE_LENGTH} caratteri`
+                      : `${SESSION_CODE_MIN_LENGTH}-${SESSION_CODE_MAX_LENGTH} caratteri: lettere, numeri e trattino`
+                  }
                   style={styles.codeInput}
                   accessory={
                     <Pressable
@@ -417,6 +444,7 @@ const HomeScreen = () => {
                   maxLength={SESSION_CODE_MAX_LENGTH}
                   onSubmitEditing={joinSession}
                   returnKeyType="go"
+                  testID="join-code"
                   style={styles.codeInput}
                   accessory={
                     <Pressable onPress={pasteCode} accessibilityRole="button" hitSlop={10}>

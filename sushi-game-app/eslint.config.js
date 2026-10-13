@@ -28,6 +28,21 @@ module.exports = defineConfig([
     rules: { 'no-console': 'off' },
   },
   {
+    // Script dei test end-to-end, eseguiti dal motore JavaScript di Maestro (variabili dei flussi)
+    files: ['e2e/**/*.js'],
+    languageOptions: {
+      globals: {
+        http: 'readonly',
+        json: 'readonly',
+        output: 'writable',
+        BACKEND_URL: 'readonly',
+        ACTION: 'readonly',
+        SESSION: 'readonly',
+        NAME: 'readonly',
+      },
+    },
+  },
+  {
     // I mock di jest.mock() vanno caricati con require
     files: ['jest.setup.ts'],
     rules: { '@typescript-eslint/no-require-imports': 'off' },

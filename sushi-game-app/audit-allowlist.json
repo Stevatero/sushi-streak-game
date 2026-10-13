@@ -1,0 +1,14 @@
+[
+  {
+    "id": "GHSA-vfj7-8cjw-p6xm",
+    "package": "braces",
+    "reason": "Solo strumenti di build (micromatch di Jest e Metro valutano pattern scritti nel progetto); non incluso nell'app e nessuna versione corretta pubblicata (ultima 3.0.3)",
+    "reviewBy": "2027-01-15"
+  },
+  {
+    "id": "GHSA-86w9-cpqp-85rv",
+    "package": "node-forge",
+    "reason": "Solo Expo CLI (@expo/cli, certificati di sviluppo e firma degli aggiornamenti, non usata); non incluso nell'app e nessuna versione corretta pubblicata (ultima 1.4.0)",
+    "reviewBy": "2027-01-15"
+  }
+]

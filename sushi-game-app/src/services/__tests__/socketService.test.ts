@@ -7,7 +7,7 @@ class FakeSocket {
   connected = false;
   handlers = new Map<string, Handler[]>();
   emitted: { event: string; payload: unknown }[] = [];
-  // Risposte simulate del server per evento (ack)
+  // Risposte simulate del server per evento (ack): un valore fisso o una funzione del payload
   responses: Record<string, unknown> = {};
   io = { on: jest.fn() };
 
@@ -38,7 +38,9 @@ class FakeSocket {
     return {
       emit: (event: string, payload: unknown, cb: (err: Error | null, res?: unknown) => void) => {
         this.emitted.push({ event, payload });
-        if (event in this.responses) cb(null, this.responses[event]);
+        const response = this.responses[event];
+        if (typeof response === 'function') cb(null, response(payload));
+        else if (event in this.responses) cb(null, response);
         else cb(new Error('timeout'));
       },
     };
@@ -87,7 +89,10 @@ describe('socketService', () => {
     await flush();
 
     expect(mockSocket.connect).toHaveBeenCalled();
-    expect(mockSocket.emitted).toContainEqual({ event: 'join_session', payload: credentials });
+    expect(mockSocket.emitted).toContainEqual({
+      event: 'join_session',
+      payload: expect.objectContaining({ ...credentials, appVersion: expect.any(String) }),
+    });
     expect(onSession).toHaveBeenCalledWith(snapshot);
     expect(service.getStatus()).toBe('connected');
   });
@@ -179,5 +184,207 @@ describe('socketService', () => {
     unsubscribe();
     mockSocket.trigger('session_update', snapshot);
     expect(listener).toHaveBeenCalledTimes(1);
+  });
+
+  describe('coda dei pezzi (server 1.8+)', () => {
+    const me = (score: number, seq: number) => ({
+      ...snapshot,
+      players: [{ id: 'p1', name: 'Anna', score, finished: false, seq }],
+    });
+
+    // Server simulato: applica i pezzi numerati una sola volta, come il backend
+    function fakeServer(initialSeq = 0) {
+      const state = { score: 0, lastSeq: initialSeq, applied: 0 };
+      const piece = (delta: number) => (payload: { seq?: number }) => {
+        if (payload.seq !== undefined && payload.seq <= state.lastSeq) {
+          return { ok: true, score: state.score, lastSeq: state.lastSeq, duplicate: true };
+        }
+        state.score = Math.max(0, state.score + delta);
+        state.lastSeq = payload.seq ?? state.lastSeq;
+        state.applied += 1;
+        return { ok: true, score: state.score, lastSeq: state.lastSeq };
+      };
+      mockSocket.responses.join_session = () => ({
+        ok: true,
+        session: me(state.score, state.lastSeq),
+        lastSeq: state.lastSeq,
+        features: ['piece_seq', 'end_session', 'host_transfer'],
+      });
+      mockSocket.responses.add_piece = piece(1);
+      mockSocket.responses.remove_piece = piece(-1);
+      return state;
+    }
+
+    const sentPieces = () =>
+      mockSocket.emitted.filter((e) => e.event === 'add_piece' || e.event === 'remove_piece').map((e) => e.payload);
+
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    it('scopre le funzioni del server e invia i pezzi numerati', async () => {
+      const server = fakeServer();
+      const service = loadService();
+      const onFeatures = jest.fn();
+      service.on('features', onFeatures);
+      service.joinSession(credentials);
+      await jest.advanceTimersByTimeAsync(0);
+      expect(onFeatures).toHaveBeenCalledWith({ pieceQueue: true, endSession: true });
+
+      await expect(service.addPiece()).resolves.toEqual({ ok: true, queued: false });
+      await service.addPiece();
+      await jest.advanceTimersByTimeAsync(500);
+      expect(sentPieces()).toEqual([{ seq: 1 }, { seq: 2 }]);
+      expect(server.score).toBe(2);
+      expect(service.getPending()).toEqual({ delta: 0, count: 0 });
+    });
+
+    it('offline registra i pezzi e li invia una sola volta al rientro', async () => {
+      const server = fakeServer();
+      const service = loadService();
+      service.joinSession(credentials);
+      await jest.advanceTimersByTimeAsync(0);
+
+      mockSocket.connected = false;
+      mockSocket.trigger('disconnect');
+      expect(service.getStatus()).toBe('connecting');
+      const pending = jest.fn();
+      service.on('pending', pending);
+      await expect(service.addPiece()).resolves.toEqual({ ok: true, queued: true });
+      await service.addPiece();
+      expect(service.getPending()).toEqual({ delta: 2, count: 2 });
+      expect(pending).toHaveBeenLastCalledWith({ delta: 2, count: 2 });
+      expect(sentPieces()).toEqual([]);
+
+      mockSocket.connected = true;
+      mockSocket.trigger('connect');
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(sentPieces()).toEqual([{ seq: 1 }, { seq: 2 }]);
+      expect(server.score).toBe(2);
+      expect(service.getPending()).toEqual({ delta: 0, count: 0 });
+    });
+
+    it('un pezzo già applicato non viene rinviato dopo un timeout e una riconnessione', async () => {
+      const server = fakeServer();
+      const service = loadService();
+      service.joinSession(credentials);
+      await jest.advanceTimersByTimeAsync(0);
+
+      // Il server applica il pezzo ma la risposta va persa
+      mockSocket.responses.add_piece = (payload: { seq: number }) => {
+        server.score += 1;
+        server.lastSeq = payload.seq;
+        server.applied += 1;
+        mockSocket.connected = false;
+        return undefined;
+      };
+      await service.addPiece();
+      await jest.advanceTimersByTimeAsync(0);
+      expect(service.getPending().count).toBe(1);
+
+      // Riconnessione: il server indica che il pezzo 1 è già contato
+      fakeServer(server.lastSeq);
+      mockSocket.connected = true;
+      mockSocket.trigger('disconnect');
+      mockSocket.connected = true;
+      mockSocket.trigger('connect');
+      await jest.advanceTimersByTimeAsync(2000);
+      expect(server.applied).toBe(1);
+      expect(service.getPending()).toEqual({ delta: 0, count: 0 });
+
+      await service.addPiece();
+      await jest.advanceTimersByTimeAsync(500);
+      expect(sentPieces().at(-1)).toEqual({ seq: 2 });
+    });
+
+    it("un aggiornamento della partita che contiene già il pezzo lo toglie dall'attesa", async () => {
+      fakeServer();
+      const service = loadService();
+      service.joinSession(credentials);
+      await jest.advanceTimersByTimeAsync(0);
+      // Nessuna risposta: il pezzo resta in volo
+      delete mockSocket.responses.add_piece;
+      mockSocket.timeout = () => ({ emit: () => undefined }) as never;
+      await service.addPiece();
+      await jest.advanceTimersByTimeAsync(0);
+      expect(service.getPending()).toEqual({ delta: 1, count: 1 });
+
+      const onSession = jest.fn(() => expect(service.getPending()).toEqual({ delta: 0, count: 0 }));
+      service.on('session', onSession);
+      mockSocket.trigger('session_update', me(1, 1));
+      expect(onSession).toHaveBeenCalled();
+    });
+
+    it('annullare un pezzo non ancora inviato lo toglie dalla coda', async () => {
+      fakeServer();
+      const service = loadService();
+      service.joinSession(credentials);
+      await jest.advanceTimersByTimeAsync(0);
+      mockSocket.connected = false;
+      mockSocket.trigger('disconnect');
+
+      await service.addPiece();
+      await service.addPiece();
+      await service.removePiece();
+      expect(service.getPending()).toEqual({ delta: 1, count: 1 });
+    });
+
+    it('se la partita si chiude i pezzi in attesa vengono scartati e segnalati', async () => {
+      fakeServer();
+      const service = loadService();
+      const dropped = jest.fn();
+      service.on('dropped', dropped);
+      service.joinSession(credentials);
+      await jest.advanceTimersByTimeAsync(0);
+      mockSocket.connected = false;
+      mockSocket.trigger('disconnect');
+      await service.addPiece();
+
+      mockSocket.trigger('game_ended', { ...me(0, 0), status: 'ended' });
+      expect(dropped).toHaveBeenCalledWith({ count: 1, code: 'session_closed' });
+      expect(service.getPending()).toEqual({ delta: 0, count: 0 });
+    });
+
+    it('"Ho finito" attende l’invio dei pezzi; offline non parte', async () => {
+      const server = fakeServer();
+      mockSocket.responses.player_finished = { ok: true };
+      const service = loadService();
+      service.joinSession(credentials);
+      await jest.advanceTimersByTimeAsync(0);
+
+      await service.addPiece();
+      await service.addPiece();
+      const finished = service.finishGame();
+      await jest.advanceTimersByTimeAsync(1000);
+      await expect(finished).resolves.toEqual({ ok: true });
+      expect(server.score).toBe(2);
+      const events = mockSocket.emitted.map((e) => e.event);
+      expect(events.lastIndexOf('add_piece')).toBeLessThan(events.indexOf('player_finished'));
+
+      mockSocket.connected = false;
+      mockSocket.trigger('disconnect');
+      await service.addPiece();
+      await expect(service.finishGame()).resolves.toMatchObject({ ok: false, code: 'pending' });
+    });
+
+    it("l'host termina la partita per tutti", async () => {
+      fakeServer();
+      mockSocket.responses.end_session = { ok: true };
+      const service = loadService();
+      service.joinSession(credentials);
+      await jest.advanceTimersByTimeAsync(0);
+      await expect(service.endSession()).resolves.toEqual({ ok: true });
+      expect(mockSocket.emitted.some((e) => e.event === 'end_session')).toBe(true);
+    });
+
+    it("con un'app da aggiornare il rientro fallisce in modo definitivo", async () => {
+      mockSocket.responses.join_session = { ok: false, code: 'upgrade_required', error: 'Aggiorna' };
+      const service = loadService();
+      const onFail = jest.fn();
+      service.on('joinFailed', onFail);
+      service.joinSession(credentials);
+      await jest.advanceTimersByTimeAsync(5000);
+      expect(onFail).toHaveBeenCalledWith(expect.objectContaining({ code: 'upgrade_required' }));
+      expect(mockSocket.emitted.filter((e) => e.event === 'join_session')).toHaveLength(1);
+    });
   });
 });

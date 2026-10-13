@@ -7,6 +7,8 @@ import GameSessionScreen from '../GameSessionScreen';
 import socketService from '../../services/socketService';
 import { SessionStorageService } from '../../services/sessionStorage';
 import useGameStore from '../../store/gameStore';
+import { captureRef } from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
 
 type Listener = (payload: any) => void;
 
@@ -51,9 +53,12 @@ jest.mock('../../services/socketService', () => {
       joinSession: jest.fn(),
       leaveSession: jest.fn(),
       getStatus: jest.fn(() => 'connected'),
+      getFeatures: jest.fn(() => ({ pieceQueue: false, endSession: false })),
+      getPending: jest.fn(() => ({ delta: 0, count: 0 })),
       addPiece: jest.fn(() => Promise.resolve({ ok: true, score: 1 })),
       removePiece: jest.fn(() => Promise.resolve({ ok: true, score: 0 })),
       finishGame: jest.fn(() => Promise.resolve({ ok: true })),
+      endSession: jest.fn(() => Promise.resolve({ ok: true })),
       kickPlayer: jest.fn(() => Promise.resolve({ ok: true })),
     },
   };
@@ -273,6 +278,106 @@ describe('GameSessionScreen', () => {
     expect(screen.getByText('Sei stato rimosso dalla partita')).toBeTruthy();
     expect(screen.getByText('Torna alla Home')).toBeTruthy();
     await waitFor(async () => expect(await SessionStorageService.getActiveSession()).toBeNull());
+    expect(await SessionStorageService.getSavedSessions()).toHaveLength(0);
+  });
+
+  describe('con un server 1.8', () => {
+    const features = (endSession = true) => serverEmit('features', { pieceQueue: true, endSession });
+
+    it('offline registra i pezzi, li conta subito e indica quanti sono da inviare', async () => {
+      (socketService.addPiece as jest.Mock).mockResolvedValueOnce({ ok: true, queued: true });
+      await renderWithProviders(<GameSessionScreen />);
+      serverEmit('session', snapshot());
+      features();
+      serverEmit('connection', 'connecting');
+
+      fireEvent.press(screen.getByLabelText('Aggiungi pezzo'));
+      await waitFor(() => expect(socketService.addPiece).toHaveBeenCalledTimes(1));
+      expect(await screen.findByText(/i pezzi verranno inviati appena torni online/)).toBeTruthy();
+
+      serverEmit('pending', { delta: 1, count: 1 });
+      expect(screen.getByText('Sei 2° su 2 · 4 pezzi')).toBeTruthy();
+      expect(screen.getByText(/1 da inviare/)).toBeTruthy();
+      expect(screen.getByText(/i pezzi partono appena torni online/)).toBeTruthy();
+    });
+
+    it('avvisa se dei pezzi in attesa non sono stati registrati', async () => {
+      await renderWithProviders(<GameSessionScreen />);
+      serverEmit('session', snapshot());
+      serverEmit('dropped', { count: 2, code: 'session_closed' });
+      expect(await screen.findByText(/2 tocchi non sono stati registrati/)).toBeTruthy();
+    });
+
+    it("l'host termina la partita per tutti dopo una conferma", async () => {
+      await renderWithProviders(<GameSessionScreen />);
+      serverEmit('session', { ...snapshot(), hostId: 'p1' });
+      features();
+
+      fireEvent.press(screen.getByText('Termina la partita per tutti'));
+      expect(screen.getByText('Terminare la partita per tutti?')).toBeTruthy();
+      expect(screen.getByText(/1 giocatore non ha ancora finito/)).toBeTruthy();
+      await act(async () => {
+        fireEvent.press(screen.getByText('Termina la partita'));
+      });
+      expect(socketService.endSession).toHaveBeenCalledTimes(1);
+    });
+
+    it('chi non gestisce la partita non può terminarla', async () => {
+      await renderWithProviders(<GameSessionScreen />);
+      serverEmit('session', { ...snapshot(), hostId: 'p2' });
+      features();
+      expect(screen.queryByText('Termina la partita per tutti')).toBeNull();
+    });
+
+    it('a fine partita indica se l’ha chiusa chi la gestiva', async () => {
+      await renderWithProviders(<GameSessionScreen />);
+      serverEmit('gameEnded', { ...snapshot('ended', true), closedBy: 'host' });
+      expect(screen.getAllByText('Chiusa da chi gestiva la partita.').length).toBeGreaterThan(0);
+    });
+
+    it('avvisa quando il ruolo di host passa a questo giocatore', async () => {
+      await renderWithProviders(<GameSessionScreen />);
+      serverEmit('session', { ...snapshot(), hostId: 'p2' });
+      serverEmit('session', { ...snapshot(), hostId: 'p1' });
+      expect(await screen.findByText(/Ora gestisci tu la partita/)).toBeTruthy();
+    });
+  });
+
+  it('condivide il risultato come immagine', async () => {
+    await renderWithProviders(<GameSessionScreen />);
+    serverEmit('gameEnded', snapshot('ended', true));
+    // La classifica finale si apre da sola: il pulsante è sia nel pannello sia nella classifica
+    fireEvent.press((await screen.findAllByText('Condividi il risultato'))[0]);
+    const share = await screen.findByText('Condividi immagine');
+    await act(async () => {
+      fireEvent.press(share);
+    });
+    expect(captureRef).toHaveBeenCalled();
+    expect(Sharing.shareAsync).toHaveBeenCalledWith(
+      'file:///tmp/sushi-streak-risultato.png',
+      expect.objectContaining({ mimeType: 'image/png' })
+    );
+  });
+
+  it('l’invito mostra il codice QR con il link della partita', async () => {
+    await renderWithProviders(<GameSessionScreen />);
+    serverEmit('session', snapshot());
+    fireEvent.press(screen.getByLabelText('Condividi la sessione'));
+    expect(await screen.findByLabelText('Codice QR per entrare nella partita CENA')).toBeTruthy();
+    expect(screen.getByText('Copia codice')).toBeTruthy();
+  });
+
+  it("se l'app va aggiornata lo spiega e lascia la partita riprendibile", async () => {
+    await renderWithProviders(<GameSessionScreen />);
+    await waitFor(async () => expect(await SessionStorageService.getActiveSession()).not.toBeNull());
+    serverEmit('joinFailed', { ok: false, code: 'upgrade_required' });
+
+    expect(screen.getByText('Aggiorna Sushi Streak')).toBeTruthy();
+    expect(screen.getByText("Aggiorna l'app")).toBeTruthy();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(await SessionStorageService.getActiveSession()).toMatchObject({ sessionId: 'CENA' });
     expect(await SessionStorageService.getSavedSessions()).toHaveLength(0);
   });
 });

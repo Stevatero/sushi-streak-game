@@ -18,9 +18,12 @@ jest.mock('../../services/socketService', () => {
       joinSession: jest.fn(),
       leaveSession: jest.fn(),
       getStatus: jest.fn(() => 'connecting'),
+      getFeatures: jest.fn(() => ({ pieceQueue: false, endSession: false })),
+      getPending: jest.fn(() => ({ delta: 0, count: 0 })),
       addPiece: jest.fn(() => Promise.resolve({ ok: true, score: 1 })),
       removePiece: jest.fn(),
       finishGame: jest.fn(),
+      endSession: jest.fn(() => Promise.resolve({ ok: true })),
     },
   };
 });
@@ -113,5 +116,38 @@ describe('gameStore', () => {
     expect(useGameStore.getState().gameEnded).toBe(false);
     emit('kicked', { sessionId: 'CENA' });
     expect(useGameStore.getState()).toMatchObject({ gameEnded: true, endReason: 'kicked' });
+  });
+
+  it('aggiorna insieme classifica e pezzi in attesa, e segnala quelli scartati', () => {
+    (socketService.getPending as jest.Mock).mockReturnValueOnce({ delta: 2, count: 2 });
+    start();
+    emit('session', { id: 'CENA', name: 'Cena', status: 'active', expiresAt: 1, players });
+    expect(useGameStore.getState()).toMatchObject({ pendingDelta: 2, pendingCount: 2 });
+
+    emit('pending', { delta: 0, count: 0 });
+    expect(useGameStore.getState()).toMatchObject({ pendingDelta: 0, pendingCount: 0 });
+
+    emit('dropped', { count: 3, code: 'session_closed' });
+    expect(useGameStore.getState().droppedPieces).toMatchObject({ count: 3 });
+  });
+
+  it('memorizza le funzioni del server e chi ha chiuso la partita', () => {
+    start();
+    emit('features', { pieceQueue: true, endSession: true });
+    expect(useGameStore.getState().features).toEqual({ pieceQueue: true, endSession: true });
+    emit('gameEnded', { id: 'CENA', name: 'Cena', status: 'ended', expiresAt: 1, closedBy: 'host', players });
+    expect(useGameStore.getState()).toMatchObject({ gameEnded: true, closedBy: 'host' });
+  });
+
+  it("chiude la partita se l'app va aggiornata", () => {
+    start();
+    emit('joinFailed', { ok: false, code: 'upgrade_required' });
+    expect(useGameStore.getState()).toMatchObject({ gameEnded: true, endReason: 'upgrade_required' });
+  });
+
+  it("l'host termina la partita tramite il socket", async () => {
+    start();
+    await useGameStore.getState().endSession();
+    expect(socketService.endSession).toHaveBeenCalled();
   });
 });
