@@ -4,9 +4,9 @@
 
 const { escapeHtml } = require('./joinPage');
 
-const LAST_UPDATED = '29 settembre 2026';
+const LAST_UPDATED = '13 ottobre 2026';
 
-function renderPrivacyPage({ contact, retentionDays, inactivityMinutes, nonce = '' }) {
+function renderPrivacyPage({ contact, retentionDays, inactivityMinutes, crashRetentionDays = 30, nonce = '' }) {
   const isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact);
   const contactHtml = isEmail
     ? `<a href="mailto:${escapeHtml(contact)}">${escapeHtml(contact)}</a>`
@@ -54,7 +54,8 @@ function renderPrivacyPage({ contact, retentionDays, inactivityMinutes, nonce = 
     <tr>
       <td>Nome (nickname) scelto per la partita</td>
       <td>Mostrarlo in classifica agli altri partecipanti</td>
-      <td rowspan="3">Per tutta la durata della partita; la partita si chiude quando tutti hanno finito o dopo
+      <td rowspan="3">Per tutta la durata della partita; la partita si chiude quando tutti hanno finito, quando
+        chi la gestisce la termina, quando resta ferma a lungo dopo che almeno metà dei giocatori ha finito o dopo
         ${Number(inactivityMinutes)} minuti di inattività. I dati delle partite chiuse vengono cancellati
         automaticamente dopo ${Number(retentionDays)} giorni. Se chi ha creato la partita ti rimuove, i tuoi dati
         di quella partita vengono cancellati subito: resta solo il nickname, per impedire di rientrare nella
@@ -70,6 +71,17 @@ function renderPrivacyPage({ contact, retentionDays, inactivityMinutes, nonce = 
     </tr>
   </table>
 
+  <h2>Segnalazioni di errore (facoltative)</h2>
+  <p>Sono <strong>disattivate di default</strong>. Solo se le attivi in <em>Impostazioni → Privacy → Segnalazioni
+  di errore</em>, quando l'app incontra un errore invia al server di Sushi Streak (nessun servizio di terze parti):
+  versione dell'app, sistema operativo e sua versione, nome, messaggio e traccia tecnica dell'errore, e se ha
+  causato la chiusura dell'app. Non contengono il tuo nickname, i punteggi, i codici delle partite né altri dati
+  personali; l'indirizzo IP serve solo alla trasmissione e al limite di invii e non viene salvato con la
+  segnalazione. Servono solo a correggere i problemi dell'app e vengono cancellate automaticamente dopo
+  ${Number(crashRetentionDays)} giorni. Se un errore chiude l'app, la segnalazione resta sul dispositivo e viene
+  inviata all'avvio successivo. Puoi disattivarle in qualsiasi momento: l'eventuale segnalazione ancora da
+  inviare viene cancellata.</p>
+
   <h2>Chi può vedere i dati di una partita</h2>
   <p>Nome e punteggio sono visibili agli altri partecipanti della stessa partita e a chiunque conosca il codice
   della sessione tramite la pagina di invito (<code>/join/CODICE</code>). Scegli quindi un nickname che non ti
@@ -77,10 +89,12 @@ function renderPrivacyPage({ contact, retentionDays, inactivityMinutes, nonce = 
 
   <h2>Dati salvati solo sul tuo dispositivo</h2>
   <p>L'app salva localmente, senza inviarli al server: il nome usato nell'ultima partita, lo storico delle
-  partite (nomi dei partecipanti, punteggi, eventuale ristorante indicato da te), le preferenze di tema e audio
-  e le credenziali per riconnetterti alla partita in corso (il token segreto è conservato nell'archivio sicuro
-  del sistema: Android Keystore o Portachiavi di iOS). Questi dati sono esclusi dal backup automatico
-  (Android e iCloud) e puoi cancellarli in qualsiasi momento da <em>Impostazioni → Cancella dati locali</em> o
+  partite (nomi dei partecipanti, punteggi, eventuale ristorante indicato da te), le preferenze di tema, audio,
+  vibrazione e segnalazioni di errore, le credenziali per riconnetterti alla partita in corso (il token segreto
+  è conservato nell'archivio sicuro del sistema: Android Keystore o Portachiavi di iOS) e, se le hai attivate,
+  una segnalazione di errore in attesa di invio. Le immagini del risultato che condividi sono create sul
+  dispositivo e inviate solo alle app che scegli tu. Questi dati sono esclusi dal backup automatico (Android e
+  iCloud) e puoi cancellarli in qualsiasi momento da <em>Impostazioni → Cancella dati locali</em> o
   disinstallando l'app.</p>
 
   <h2>Sicurezza</h2>
@@ -88,7 +102,8 @@ function renderPrivacyPage({ contact, retentionDays, inactivityMinutes, nonce = 
 
   <h2>Base giuridica</h2>
   <p>I dati sono trattati per fornire il servizio richiesto dall'utente (esecuzione del servizio) e, per i dati
-  tecnici di connessione, per il legittimo interesse alla sicurezza del servizio.</p>
+  tecnici di connessione, per il legittimo interesse alla sicurezza del servizio. Le segnalazioni di errore sono
+  inviate solo con il tuo consenso, che puoi revocare in qualsiasi momento dalle Impostazioni.</p>
 
   <h2>I tuoi diritti</h2>
   <p>Puoi chiedere accesso, rettifica o cancellazione dei dati di una partita, o opporti al trattamento,

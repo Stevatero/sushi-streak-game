@@ -23,22 +23,47 @@ const DEFAULT_CORS_ORIGINS = [
   'https://sushi.dietalab.net',
 ];
 
+const MINUTE_MS = 60 * 1000;
+const DAY_MS = 24 * 60 * MINUTE_MS;
+
+// Minuti da una variabile d'ambiente: 0 è un valore valido (disattiva la funzione), vuoto o non valido
+// usa il default
+function minutesFromEnv(value, defaultMinutes) {
+  if (value === undefined || String(value).trim() === '') return defaultMinutes;
+  const minutes = Number(value);
+  return Number.isFinite(minutes) && minutes >= 0 ? minutes : defaultMinutes;
+}
+
 const DEFAULT_CONFIG = {
   port: Number(process.env.PORT) || 3000,
   // Interfaccia di ascolto: in produzione 127.0.0.1, così il server è raggiungibile solo tramite nginx
   host: process.env.HOST || '0.0.0.0',
   dbPath: process.env.DB_PATH || path.join(__dirname, 'sushi_game.db'),
   // Dopo quanto tempo senza attività una sessione viene chiusa (default 3 ore)
-  inactivityMs: (Number(process.env.SESSION_INACTIVITY_MIN) || 180) * 60 * 1000,
+  inactivityMs: (Number(process.env.SESSION_INACTIVITY_MIN) || 180) * MINUTE_MS,
   // Per quanto tempo si conservano le sessioni chiuse prima di cancellarle (default 30 giorni)
-  retentionMs: (Number(process.env.SESSION_RETENTION_DAYS) || 30) * 24 * 60 * 60 * 1000,
-  sweepIntervalMs: 60 * 1000,
+  retentionMs: (Number(process.env.SESSION_RETENTION_DAYS) || 30) * DAY_MS,
+  // Chiusura automatica di una partita dopo questi minuti senza pezzi, se almeno metà dei giocatori ha
+  // finito (default 45, 0 = mai)
+  autoEndIdleMs: minutesFromEnv(process.env.SESSION_AUTO_END_MIN, 45) * MINUTE_MS,
+  // Il ruolo di host passa a un altro giocatore connesso dopo questi minuti di assenza dell'host
+  // (default 15, 0 = mai)
+  hostTransferMs: minutesFromEnv(process.env.HOST_TRANSFER_MIN, 15) * MINUTE_MS,
+  // Versione minima dell'app (es. 1.8.0): le precedenti ricevono "upgrade_required". Vuoto = tutte
+  minAppVersion: process.env.MIN_APP_VERSION || '',
+  // L'ultima attività di una partita è sempre aggiornata in memoria e salvata al più ogni 30 secondi
+  activityPersistMs: 30 * 1000,
+  // Segnalazioni di errore inviate dall'app (solo con il consenso dell'utente): conservazione e limiti
+  crashRetentionMs: (Number(process.env.CRASH_RETENTION_DAYS) || 30) * DAY_MS,
+  maxCrashReports: 5000,
+  sweepIntervalMs: MINUTE_MS,
   maxPlayersPerSession: 30,
-  // Limiti di frequenza per IP: creazione/ingresso, letture pubbliche (info e pagina di invito) e
-  // ingresso via socket (anche le riconnessioni)
-  writeRateLimit: { max: 30, windowMs: 60 * 1000 },
-  readRateLimit: { max: 120, windowMs: 60 * 1000 },
-  socketJoinRateLimit: { max: 60, windowMs: 60 * 1000 },
+  // Limiti di frequenza per IP: creazione/ingresso, letture pubbliche (info e pagina di invito),
+  // ingresso via socket (anche le riconnessioni) e segnalazioni di errore
+  writeRateLimit: { max: 30, windowMs: MINUTE_MS },
+  readRateLimit: { max: 120, windowMs: MINUTE_MS },
+  socketJoinRateLimit: { max: 60, windowMs: MINUTE_MS },
+  crashReportRateLimit: { max: 20, windowMs: 60 * MINUTE_MS },
   corsOrigins: process.env.CORS_ORIGINS
     ? process.env.CORS_ORIGINS.split(',')
         .map((o) => o.trim())
@@ -69,6 +94,25 @@ const MAX_PLAYER_NAME_LENGTH = 20;
 const MAX_SCORE = 999;
 // Limite di frequenza per add/remove piece: massimo N eventi per finestra
 const PIECE_RATE_LIMIT = { max: 6, windowMs: 1000 };
+// Funzioni del protocollo offerte da questo server, comunicate all'app quando entra in partita:
+// piece_seq = pezzi numerati (nessun doppione rinviando dopo un timeout), end_session = l'host chiude
+// la partita per tutti, host_transfer = il ruolo di host passa a un altro giocatore se l'host è assente
+const FEATURES = ['piece_seq', 'end_session', 'host_transfer'];
+const UPGRADE_MESSAGE = "È disponibile una nuova versione di Sushi Streak: aggiorna l'app per continuare a giocare.";
+
+const VERSION_RE = /^(\d+)\.(\d+)\.(\d+)/;
+
+function parseVersion(value) {
+  const match = typeof value === 'string' ? VERSION_RE.exec(value.trim()) : null;
+  return match ? match.slice(1).map(Number) : null;
+}
+
+function compareVersions(a, b) {
+  for (let i = 0; i < 3; i++) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return 0;
+}
 
 class ApiError extends Error {
   constructor(status, message, code) {
@@ -172,9 +216,23 @@ function parseKickedNames(value) {
 function createServer(options = {}) {
   const config = { ...DEFAULT_CONFIG, ...options };
   const db = openDatabase(config.dbPath);
+  const minAppVersion = parseVersion(config.minAppVersion);
+  if (config.minAppVersion && !minAppVersion) {
+    logger.warn('MIN_APP_VERSION non valida, nessun controllo della versione', { value: config.minAppVersion });
+  }
+
+  // Le versioni dell'app precedenti alla minima configurata devono essere aggiornate. Le app 1.7 e
+  // precedenti non indicano la versione: con un minimo configurato vengono considerate da aggiornare
+  const isSupportedApp = (version) => {
+    if (!minAppVersion) return true;
+    const parsed = parseVersion(version);
+    return !!parsed && compareVersions(parsed, minAppVersion) >= 0;
+  };
 
   // Sessioni attive in memoria:
-  // id -> { id, name, status, startedAt, lastActivity, hostId, kickedNames: Set, players: Map<id, player> }
+  // id -> { id, name, status, startedAt, lastActivity, persistedActivity, lastProgressAt, hostId,
+  //         hostSeenAt, closedBy, kickedNames: Set, players: Map<id, player> }
+  // player -> { id, name, score, finished, lastSeq, tokenHash }
   const sessions = new Map();
   const pendingLoads = new Map();
   // Codici in fase di creazione: due creazioni contemporanee dello stesso codice non si sovrappongono
@@ -193,11 +251,15 @@ function createServer(options = {}) {
       startedAt: session.startedAt,
       expiresAt: expiresAt(session),
       hostId: session.hostId,
+      // Chi ha chiuso la partita: 'host', 'auto' (nessun pezzo per un po') o null (tutti hanno finito)
+      closedBy: session.closedBy ?? null,
       players: [...session.players.values()].map((p) => ({
         id: p.id,
         name: p.name,
         score: p.score,
         finished: p.finished,
+        // Ultimo pezzo numerato applicato: l'app capisce quali pezzi in attesa sono già contati
+        seq: p.lastSeq,
       })),
     };
   }
@@ -223,9 +285,17 @@ function createServer(options = {}) {
 
   // Prima il database, poi la memoria: se la scrittura fallisce la sessione resta attiva e coerente
   // (la chiusura viene ritentata dal controllo periodico o dal prossimo evento)
-  async function closeSession(session, status) {
-    await db.run('UPDATE sessions SET status = ?, ended_at = ? WHERE id = ?', [status, Date.now(), session.id]);
+  async function closeSession(session, status, closedBy = null) {
+    await db.run('UPDATE sessions SET status = ?, ended_at = ?, closed_by = ?, last_activity = ? WHERE id = ?', [
+      status,
+      Date.now(),
+      closedBy,
+      session.lastActivity,
+      session.id,
+    ]);
     session.status = status;
+    session.closedBy = closedBy;
+    session.persistedActivity = session.lastActivity;
     sessions.delete(session.id);
   }
 
@@ -238,19 +308,33 @@ function createServer(options = {}) {
       const row = await db.get('SELECT * FROM sessions WHERE id = ?', [sessionId]);
       if (!row) return null;
       const rows = await db.all('SELECT * FROM players WHERE session_id = ? ORDER BY joined_at, rowid', [sessionId]);
+      const startedAt = row.started_at || parseSqliteTimestamp(row.created_at);
       const session = {
         id: row.id,
         name: row.name,
         status: row.status || 'active',
-        startedAt: row.started_at || parseSqliteTimestamp(row.created_at),
+        startedAt,
         lastActivity: row.last_activity || 0,
+        persistedActivity: row.last_activity || 0,
+        // Dopo un riavvio l'ultimo pezzo non è noto: si usa l'ultima attività (stima prudente)
+        lastProgressAt: row.last_activity || startedAt || Date.now(),
         // Le sessioni create prima della colonna host_id hanno come host il primo giocatore entrato
         hostId: row.host_id || rows[0]?.id || null,
+        // L'assenza dell'host si conta da quando il server ha (ri)caricato la partita
+        hostSeenAt: Date.now(),
+        closedBy: row.closed_by || null,
         kickedNames: parseKickedNames(row.kicked_names),
         players: new Map(
           rows.map((p) => [
             p.id,
-            { id: p.id, name: p.name, score: p.score || 0, finished: !!p.finished, tokenHash: p.token },
+            {
+              id: p.id,
+              name: p.name,
+              score: p.score || 0,
+              finished: !!p.finished,
+              lastSeq: p.last_seq || 0,
+              tokenHash: p.token,
+            },
           ])
         ),
       };
@@ -272,18 +356,33 @@ function createServer(options = {}) {
     }
   }
 
-  function touch(session) {
-    session.lastActivity = Date.now();
-    db.run('UPDATE sessions SET last_activity = ? WHERE id = ?', [session.lastActivity, session.id]).catch(
-      logDbError('last_activity')
-    );
+  // Salva l'ultima attività sul database (solo se è cambiata)
+  function persistActivity(session) {
+    const value = session.lastActivity;
+    if (value === session.persistedActivity) return Promise.resolve();
+    session.persistedActivity = value;
+    return db.run('UPDATE sessions SET last_activity = ? WHERE id = ?', [value, session.id]).catch((err) => {
+      // Al prossimo salvataggio si ritenta
+      if (session.persistedActivity === value) session.persistedActivity = 0;
+      logDbError('last_activity')(err);
+    });
+  }
+
+  // Attività nella partita. In memoria è sempre aggiornata; sul database si scrive al più ogni
+  // activityPersistMs (il resto lo salvano il controllo periodico e la chiusura), così un pezzo costa una
+  // sola scrittura. progress: un pezzo, una fine o un nuovo giocatore (non una semplice riconnessione)
+  function touch(session, { progress = false } = {}) {
+    const now = Date.now();
+    session.lastActivity = now;
+    if (progress) session.lastProgressAt = now;
+    if (now - session.persistedActivity >= config.activityPersistMs) persistActivity(session);
   }
 
   function newPlayer(name) {
     const token = crypto.randomBytes(24).toString('base64url');
     return {
       token,
-      player: { id: crypto.randomUUID(), name, score: 0, finished: false, tokenHash: hashToken(token) },
+      player: { id: crypto.randomUUID(), name, score: 0, finished: false, lastSeq: 0, tokenHash: hashToken(token) },
     };
   }
 
@@ -350,6 +449,11 @@ function createServer(options = {}) {
   const writeLimiter = createRateLimiter(config.writeRateLimit);
   const readLimiter = createRateLimiter(config.readRateLimit);
   const socketJoinLimiter = createRateLimiter(config.socketJoinRateLimit);
+  const crashReportLimiter = createRateLimiter(config.crashReportRateLimit);
+
+  // L'app 1.8+ indica la propria versione nell'header X-App-Version
+  const requireSupportedApp = (req, res, next) =>
+    isSupportedApp(req.get('x-app-version')) ? next() : next(new ApiError(426, UPGRADE_MESSAGE, 'upgrade_required'));
 
   app.get('/', (req, res) => {
     res.json({ status: 'OK', message: 'Sushi Streak Server is running!', timestamp: new Date().toISOString() });
@@ -369,6 +473,7 @@ function createServer(options = {}) {
         status: database === 'ok' ? 'healthy' : 'degraded',
         service: 'sushi-streak-backend',
         version: SERVICE_VERSION,
+        minAppVersion: minAppVersion ? config.minAppVersion : null,
         database,
         activeSessions: sessions.size,
         timestamp: new Date().toISOString(),
@@ -379,6 +484,7 @@ function createServer(options = {}) {
   app.post(
     '/api/sessions',
     writeLimiter,
+    requireSupportedApp,
     asyncRoute(async (req, res) => {
       const body = req.body || {};
       const sessionName = typeof body.sessionName === 'string' ? body.sessionName.trim() : '';
@@ -438,7 +544,11 @@ function createServer(options = {}) {
       status: 'active',
       startedAt: now,
       lastActivity: now,
+      persistedActivity: now,
+      lastProgressAt: now,
       hostId: player.id,
+      hostSeenAt: now,
+      closedBy: null,
       kickedNames: new Set(),
       players: new Map([[player.id, player]]),
     };
@@ -457,6 +567,7 @@ function createServer(options = {}) {
   app.post(
     '/api/sessions/join',
     writeLimiter,
+    requireSupportedApp,
     asyncRoute(async (req, res) => {
       const body = req.body || {};
       const sessionId = normalizeSessionId(body.sessionId);
@@ -495,7 +606,7 @@ function createServer(options = {}) {
         throw err;
       }
 
-      touch(session);
+      touch(session, { progress: true });
       io.to(sessionId).emit('session_update', publicSession(session));
 
       res.json({
@@ -538,12 +649,58 @@ function createServer(options = {}) {
     })
   );
 
+  // Segnalazioni di errore dell'app, inviate solo se l'utente le ha attivate nelle Impostazioni. Nessun
+  // dato del giocatore: versione, sistema operativo ed errore. Conservate crashRetentionMs e poi cancellate
+  app.post(
+    '/api/crash-reports',
+    crashReportLimiter,
+    asyncRoute(async (req, res) => {
+      const body = req.body && typeof req.body === 'object' ? req.body : {};
+      const text = (value, max) => (typeof value === 'string' && value.trim() ? value.slice(0, max) : null);
+      const report = {
+        appVersion: text(body.appVersion, 32),
+        platform: text(body.platform, 16),
+        osVersion: text(body.osVersion, 32),
+        name: text(body.name, 120),
+        message: text(body.message, 1000),
+        stack: text(body.stack, 6000),
+        context: text(body.context, 300),
+        fatal: body.fatal === true,
+      };
+      if (!report.name && !report.message) throw new ApiError(400, 'Segnalazione vuota', 'bad_request');
+      const { lastID } = await db.run(
+        `INSERT INTO crash_reports (received_at, app_version, platform, os_version, name, message, stack, context, fatal)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          Date.now(),
+          report.appVersion,
+          report.platform,
+          report.osVersion,
+          report.name,
+          report.message,
+          report.stack,
+          report.context,
+          report.fatal ? 1 : 0,
+        ]
+      );
+      logger.warn('Segnalazione di errore dall’app', {
+        id: lastID,
+        appVersion: report.appVersion,
+        platform: report.platform,
+        fatal: report.fatal,
+        name: report.name,
+      });
+      res.status(202).json({ ok: true });
+    })
+  );
+
   app.get('/privacy', (req, res) => {
     res.type('html').send(
       renderPrivacyPage({
         contact: config.privacyContact,
-        retentionDays: Math.round(config.retentionMs / (24 * 60 * 60 * 1000)),
-        inactivityMinutes: Math.round(config.inactivityMs / 60000),
+        retentionDays: Math.round(config.retentionMs / DAY_MS),
+        inactivityMinutes: Math.round(config.inactivityMs / MINUTE_MS),
+        crashRetentionDays: Math.round(config.crashRetentionMs / DAY_MS),
         nonce: res.locals.cspNonce,
       })
     );
@@ -589,6 +746,9 @@ function createServer(options = {}) {
     }
     if (err.type === 'entity.parse.failed') {
       return res.status(400).json({ error: 'Richiesta non valida', code: 'bad_request' });
+    }
+    if (err.type === 'entity.too.large') {
+      return res.status(413).json({ error: 'Richiesta troppo grande', code: 'too_large' });
     }
     logger.error('Errore non gestito', { err, method: req.method, path: req.path });
     return res.status(500).json({ error: 'Errore interno del server', code: 'internal' });
@@ -665,12 +825,22 @@ function createServer(options = {}) {
 
     const broadcast = (session) => io.to(session.id).emit('session_update', publicSession(session));
 
+    // Disconnessione dell'host: da qui parte il conteggio dell'assenza per il passaggio del ruolo
+    socket.on('disconnect', () => {
+      const { sessionId, playerId } = socket.data;
+      const session = sessionId ? sessions.get(sessionId) : null;
+      if (session && playerId && session.hostId === playerId) session.hostSeenAt = Date.now();
+    });
+
     socket.on(
       'join_session',
-      handler(async ({ sessionId: rawSessionId, playerId, token }, ack) => {
+      handler(async ({ sessionId: rawSessionId, playerId, token, appVersion }, ack) => {
         const sessionId = normalizeSessionId(rawSessionId);
         if (!SESSION_ID_RE.test(sessionId) || typeof playerId !== 'string') {
           return ack({ ok: false, code: 'bad_request', error: 'Dati non validi' });
+        }
+        if (!isSupportedApp(appVersion)) {
+          return ack({ ok: false, code: 'upgrade_required', error: UPGRADE_MESSAGE });
         }
         if (!socketJoinLimiter.allow(clientIp)) {
           return ack({ ok: false, code: 'rate_limited', error: 'Troppe richieste, riprova tra poco' });
@@ -691,7 +861,9 @@ function createServer(options = {}) {
         socket.join(sessionId);
 
         if (isOpen(session)) touch(session);
-        return ack({ ok: true, session: publicSession(session) });
+        if (session.hostId === playerId) session.hostSeenAt = Date.now();
+        // lastSeq: ultimo pezzo numerato applicato, da cui l'app riprende a numerare quelli in attesa
+        return ack({ ok: true, session: publicSession(session), lastSeq: player.lastSeq, features: FEATURES });
       })
     );
 
@@ -705,27 +877,43 @@ function createServer(options = {}) {
       })
     );
 
+    // Pezzo aggiunto o annullato. Con "seq" (app 1.8+) ogni pezzo ha un numero crescente per giocatore:
+    // un pezzo già applicato (stesso numero, rinviato dopo un timeout o una riconnessione) non viene
+    // contato due volte. Senza "seq" (app precedenti) ogni evento vale un pezzo, come prima
     const changeScore = (delta) =>
       handler(async (payload, ack) => {
         const context = currentContext();
         if (context.error) return ack(context.error);
+        const { seq } = payload;
+        if (seq !== undefined && !(Number.isSafeInteger(seq) && seq > 0)) {
+          return ack({ ok: false, code: 'bad_request', error: 'Dati non validi' });
+        }
         if (!withinRateLimit()) return ack({ ok: false, code: 'rate_limited', error: 'Stai andando troppo veloce!' });
 
         return withPlayerLock(context.player, async () => {
           // Lo stato va ricontrollato: nel frattempo la partita può essere finita o il giocatore rimosso
           const { session, player, error } = currentContext();
           if (error) return ack(error);
+          if (seq !== undefined && seq <= player.lastSeq) {
+            return ack({ ok: true, score: player.score, lastSeq: player.lastSeq, duplicate: true });
+          }
           if (player.finished) return ack({ ok: false, code: 'finished', error: 'Hai già finito' });
 
           const next = Math.min(MAX_SCORE, Math.max(0, player.score + delta));
-          if (next !== player.score) {
-            // Prima il database, poi la memoria: se la scrittura fallisce il punteggio non cambia
-            await db.run('UPDATE players SET score = ? WHERE id = ?', [next, player.id]);
+          const nextSeq = seq ?? player.lastSeq;
+          if (next !== player.score || nextSeq !== player.lastSeq) {
+            // Prima il database, poi la memoria: se la scrittura fallisce il punteggio non cambia.
+            // Punteggio e numero del pezzo vanno insieme, nella stessa scrittura
+            await db.run('UPDATE players SET score = ?, last_seq = ? WHERE id = ?', [next, nextSeq, player.id]);
+            const changed = next !== player.score;
             player.score = next;
-            touch(session);
-            broadcast(session);
+            player.lastSeq = nextSeq;
+            if (changed) {
+              touch(session, { progress: true });
+              broadcast(session);
+            }
           }
-          return ack({ ok: true, score: player.score });
+          return ack({ ok: true, score: player.score, lastSeq: player.lastSeq });
         });
       });
 
@@ -744,11 +932,27 @@ function createServer(options = {}) {
           if (!player.finished) {
             await db.run('UPDATE players SET finished = 1 WHERE id = ?', [player.id]);
             player.finished = true;
-            touch(session);
+            touch(session, { progress: true });
           }
           await endIfAllFinished(session);
           return ack({ ok: true });
         });
+      })
+    );
+
+    // L'host chiude la partita per tutti (es. qualcuno si è dimenticato di toccare "Ho finito"): chi non ha
+    // finito viene segnato come finito con i pezzi che ha
+    socket.on(
+      'end_session',
+      handler(async (payload, ack) => {
+        const { session, player, error } = currentContext();
+        if (error) return ack(error);
+        if (player.id !== session.hostId) {
+          return ack({ ok: false, code: 'forbidden', error: 'Solo chi gestisce la partita può terminarla' });
+        }
+        await endSession(session, 'host');
+        logger.info("Partita terminata dall'host", { sessionId: session.id });
+        return ack({ ok: true });
       })
     );
 
@@ -762,7 +966,7 @@ function createServer(options = {}) {
           return ack({
             ok: false,
             code: 'forbidden',
-            error: 'Solo chi ha creato la partita può rimuovere i giocatori',
+            error: 'Solo chi gestisce la partita può rimuovere i giocatori',
           });
         }
         if (typeof targetId !== 'string' || targetId === player.id) {
@@ -798,27 +1002,95 @@ function createServer(options = {}) {
     );
   });
 
+  // Chiude la partita come terminata (una sola volta, anche con richieste contemporanee) e invia a tutti
+  // la classifica finale. closedBy: 'host', 'auto' o null (tutti hanno finito)
+  async function finishSession(session, closedBy) {
+    if (session.status !== 'active' || session.closing) return false;
+    session.closing = true;
+    try {
+      await closeSession(session, 'ended', closedBy);
+    } finally {
+      session.closing = false;
+    }
+    const snapshot = publicSession(session);
+    io.to(session.id).emit('session_update', snapshot);
+    io.to(session.id).emit('game_ended', snapshot);
+    return true;
+  }
+
   // Chiude la partita se tutti i giocatori rimasti hanno finito, altrimenti aggiorna i client
   async function endIfAllFinished(session) {
     const players = [...session.players.values()];
     const allFinished = players.length > 0 && players.every((p) => p.finished);
-    if (allFinished && session.status === 'active') await closeSession(session, 'ended');
+    if (allFinished && (await finishSession(session, null))) return;
     io.to(session.id).emit('session_update', publicSession(session));
-    if (allFinished) io.to(session.id).emit('game_ended', publicSession(session));
+  }
+
+  // Termina la partita per tutti: chi non ha finito viene segnato come finito con i pezzi che ha. Il lock di
+  // ogni giocatore fa prima completare i pezzi che si stanno registrando, e blocca quelli successivi
+  async function endSession(session, closedBy) {
+    for (const player of [...session.players.values()]) {
+      await withPlayerLock(player, async () => {
+        if (player.finished || session.status !== 'active' || !session.players.has(player.id)) return;
+        await db.run('UPDATE players SET finished = 1 WHERE id = ?', [player.id]);
+        player.finished = true;
+      });
+    }
+    return finishSession(session, closedBy);
+  }
+
+  // Chiusura automatica: nessun pezzo da autoEndIdleMs e almeno metà dei giocatori ha già finito
+  function shouldAutoEnd(session, now) {
+    if (!config.autoEndIdleMs || now - session.lastProgressAt < config.autoEndIdleMs) return false;
+    const players = [...session.players.values()];
+    const finished = players.filter((p) => p.finished).length;
+    return finished > 0 && finished * 2 >= players.length;
+  }
+
+  // Se l'host è assente da hostTransferMs (telefono scarico, app chiusa) il ruolo passa al primo giocatore
+  // connesso, in ordine di ingresso: così qualcuno può ancora rimuovere giocatori e terminare la partita
+  async function transferHostIfAway(session, now) {
+    if (!config.hostTransferMs || session.players.size < 2) return;
+    const sockets = await io.in(session.id).fetchSockets();
+    const connected = new Set(sockets.map((s) => s.data.playerId).filter(Boolean));
+    if (connected.has(session.hostId)) {
+      session.hostSeenAt = now;
+      return;
+    }
+    if (now - session.hostSeenAt < config.hostTransferMs) return;
+    const next = [...session.players.values()].find((p) => p.id !== session.hostId && connected.has(p.id));
+    if (!next || session.status !== 'active') return;
+    await db.run('UPDATE sessions SET host_id = ? WHERE id = ?', [next.id, session.id]);
+    session.hostId = next.id;
+    session.hostSeenAt = now;
+    logger.info('Ruolo di host passato a un altro giocatore', { sessionId: session.id });
+    io.to(session.id).emit('session_update', publicSession(session));
   }
 
   // ---------------------------------------------------------------------------
-  // Manutenzione periodica: chiusura sessioni inattive e pulizia di quelle vecchie
+  // Manutenzione periodica: chiusura delle sessioni inattive o ferme, passaggio del ruolo di host,
+  // salvataggio dell'ultima attività e pulizia dei dati vecchi
   // ---------------------------------------------------------------------------
   async function sweep() {
     const now = Date.now();
     for (const session of [...sessions.values()]) {
-      if (!isExpired(session)) continue;
-      // Un errore su una sessione non deve impedire la chiusura delle altre
+      if (session.closing) continue;
+      // Un errore su una sessione non deve impedire la gestione delle altre
       try {
-        await closeSession(session, 'expired');
-        io.to(session.id).emit('session_expired', { sessionId: session.id });
-        io.in(session.id).socketsLeave(session.id);
+        if (isExpired(session)) {
+          await closeSession(session, 'expired');
+          io.to(session.id).emit('session_expired', { sessionId: session.id });
+          io.in(session.id).socketsLeave(session.id);
+          continue;
+        }
+        if (shouldAutoEnd(session, now)) {
+          if (await endSession(session, 'auto'))
+            logger.info('Partita chiusa automaticamente', { sessionId: session.id });
+          continue;
+        }
+        await transferHostIfAway(session, now);
+        // Prima della chiusura per inattività sul database qui sotto, che legge last_activity
+        await persistActivity(session);
       } catch (err) {
         logDbError('sweep_session')(err);
       }
@@ -833,6 +1105,11 @@ function createServer(options = {}) {
       [purgeBefore]
     );
     await db.run("DELETE FROM sessions WHERE status != 'active' AND ended_at < ?", [purgeBefore]);
+    // Segnalazioni di errore: cancellate dopo crashRetentionMs e comunque al massimo maxCrashReports
+    await db.run('DELETE FROM crash_reports WHERE received_at < ?', [now - config.crashRetentionMs]);
+    await db.run('DELETE FROM crash_reports WHERE id NOT IN (SELECT id FROM crash_reports ORDER BY id DESC LIMIT ?)', [
+      config.maxCrashReports,
+    ]);
   }
 
   let sweepTimer = null;
@@ -847,6 +1124,8 @@ function createServer(options = {}) {
   async function close() {
     if (sweepTimer) clearInterval(sweepTimer);
     await new Promise((resolve) => io.close(() => resolve()));
+    // L'ultima attività ancora solo in memoria va salvata prima di chiudere il database
+    await Promise.all([...sessions.values()].map((session) => persistActivity(session)));
     await db.close();
   }
 
