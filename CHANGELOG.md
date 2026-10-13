@@ -7,6 +7,51 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-10-13
+
+Partite più affidabili al tavolo: pezzi registrati anche senza rete, chiusura della partita da parte di chi la
+gestisce, inviti con codice QR e risultato da condividere come immagine. Il backend va aggiornato prima
+dell'app; resta compatibile con l'app 1.7 (i nuovi campi ed eventi del protocollo sono facoltativi).
+
+### Aggiunto
+
+- **Pezzi anche senza rete**: con la connessione assente i pezzi (e gli annullamenti) restano sul telefono, contano subito nel punteggio e nella pila, e partono da soli alla riconnessione. Il titolo della partita indica quanti sono ancora da inviare.
+- **Termina la partita per tutti**: chi gestisce la partita può chiuderla anche se qualcuno si è dimenticato di toccare "Ho finito"; chi non ha finito viene segnato come finito con i pezzi che ha.
+- **Chiusura automatica**: una partita senza nuovi pezzi da 45 minuti, in cui almeno metà dei giocatori ha già finito, si chiude da sola con il podio.
+- **Passaggio del ruolo di host**: se chi gestisce la partita resta assente per 15 minuti (telefono scarico, app chiusa), il ruolo passa al primo giocatore connesso, che riceve un avviso.
+- **Codice QR nell'invito**: gli amici al tavolo entrano inquadrandolo con la fotocamera.
+- **Risultato come immagine**: a fine partita e dallo storico si condivide una card con podio, vincitore, ristorante e data (WhatsApp, Telegram…).
+- **Vibrazione leggera** quando aggiungi o annulli un pezzo e quando vinci, disattivabile nelle Impostazioni. Su Android usa il feedback al tocco del sistema: nessuna nuova autorizzazione.
+- **Segnalazioni di errore facoltative** (Impostazioni → Privacy, disattivate di default): se l'app incontra un errore invia al nostro server versione, sistema ed errore, mai nomi o partite. Nessun servizio di terze parti.
+- **Aggiornamento richiesto**: se il server richiede una versione più recente, l'app lo spiega e porta allo store; la partita in corso resta riprendibile dopo l'aggiornamento.
+- Avviso nella Home quando il codice scelto a mano è corto (meno di 5 caratteri) e quindi facile da indovinare.
+- Lettori di schermo: annuncio dei cambi di posizione in classifica.
+
+### Modificato
+
+- A fine partita il pannello indica se l'ha chiusa chi la gestiva o la chiusura automatica.
+- Il numero dei pezzi e il pulsante +1 crescono meno con i caratteri di sistema molto grandi, per restare leggibili sopra la pila.
+- Chi gestisce la partita è indicato come "gestisce" (non più "ha creato"): con il passaggio del ruolo può non essere chi l'ha creata.
+
+### Corretto
+
+- Un pezzo rinviato dopo un timeout o una riconnessione non viene più contato due volte.
+
+### Sicurezza
+
+- Backend: aggiornato `proxy-addr` (avviso critico GHSA-jqcg-44mw-7w3h sull'IP del client dietro proxy).
+- App: patch di Expo SDK 57 (`expo` 57.0.28) e `source-map-js` 1.2.2. Per gli avvisi senza correzione che riguardano solo gli strumenti di build (`braces`, `node-forge`) la CI usa un elenco di eccezioni motivate con data di revisione (`audit-allowlist.json`).
+
+### Tecnico
+
+- Protocollo (compatibile): `add_piece`/`remove_piece` accettano un numero progressivo `seq` e il server ignora quelli già applicati; `join_session` accetta `appVersion` e risponde con `lastSeq` e `features`; nuovo evento `end_session` (solo host); gli aggiornamenti della partita indicano `closedBy` e, per ogni giocatore, l'ultimo `seq` applicato.
+- Backend: nuove colonne `players.last_seq` e `sessions.closed_by`, tabella `crash_reports` (cancellate dopo 30 giorni, al massimo 5000), endpoint `POST /api/crash-reports` con limite per IP, script `npm run crash-reports`. Nuove variabili `SESSION_AUTO_END_MIN`, `HOST_TRANSFER_MIN`, `MIN_APP_VERSION`, `CRASH_RETENTION_DAYS`.
+- Backend: l'ultima attività di una partita viene salvata al più ogni 30 secondi (e alla chiusura), così un pezzo costa una sola scrittura sul database; test con copertura in CI (`npm run test:coverage`).
+- App: schermata di gioco divisa in componenti (`src/screens/gameSession/`) e hook per il salvataggio nello storico; invito e risultato condivisi tra partita, Impostazioni e storico.
+- Test end-to-end con Maestro su emulatore Android contro un backend locale (workflow "E2E Android", anche con l'etichetta `e2e` sulle pull request).
+- Nuove dipendenze native: `expo-haptics`, `expo-sharing`, `react-native-view-shot`, `react-native-svg` (nessuna nuova autorizzazione Android, nessun permesso iOS).
+- Valutato il passaggio da `sqlite3` a `better-sqlite3`: rimandato, perché la versione attuale richiede Node 22 e `sqlite3` 6 è mantenuto.
+
 ## [1.7.1] - 2026-09-30
 
 ### Modificato
@@ -223,7 +268,8 @@ Prima versione preparata per la pubblicazione sul Google Play Store.
 
 Versione di sviluppo interna, non pubblicata sugli store.
 
-[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.7.1...HEAD
+[Unreleased]: https://github.com/Stevatero/sushi-streak-game/compare/v1.8.0...HEAD
+[1.8.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.7.1...v1.8.0
 [1.7.1]: https://github.com/Stevatero/sushi-streak-game/compare/v1.7.0...v1.7.1
 [1.7.0]: https://github.com/Stevatero/sushi-streak-game/compare/v1.6.1...v1.7.0
 [1.6.1]: https://github.com/Stevatero/sushi-streak-game/compare/v1.6.0...v1.6.1
