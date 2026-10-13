@@ -1,0 +1,50 @@
+# Senza rete i pezzi restano sul telefono e partono alla riconnessione, contati una volta sola
+appId: com.stevatero.sushistreakapp.preview
+name: Pezzi registrati offline
+env:
+  BACKEND_URL: http://localhost:3000
+---
+- runFlow:
+    file: ../subflows/crea-partita.yaml
+    env:
+      NAME: Anna
+      SESSION: E2E-OFF
+- tapOn:
+    id: add-piece
+- assertVisible:
+    id: my-score
+    text: '1'
+
+- setAirplaneMode: enabled
+- extendedWaitUntil:
+    visible: '(Riconnessione|Offline).*'
+    timeout: 60000
+- tapOn:
+    id: add-piece
+- tapOn:
+    id: add-piece
+- assertVisible:
+    id: my-score
+    text: '3'
+- assertVisible: '.*2 da inviare.*'
+
+- setAirplaneMode: disabled
+- extendedWaitUntil:
+    visible: 'Online.*'
+    timeout: 90000
+- assertVisible:
+    id: my-score
+    text: '3'
+# "Ho finito" attende che i pezzi in coda siano confermati dal server; da soli la partita si chiude
+- tapOn:
+    id: finish-game
+- tapOn: Sì, ho finito!
+- extendedWaitUntil:
+    visible: Classifica finale
+    timeout: 30000
+- runScript:
+    file: ../scripts/api.js
+    env:
+      ACTION: info
+      SESSION: E2E-OFF
+- assertTrue: ${output.session.status == 'ended' && output.session.firstScore == 3}

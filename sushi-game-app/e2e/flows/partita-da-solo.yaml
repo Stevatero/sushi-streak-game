@@ -1,0 +1,60 @@
+# Partita da soli: pezzi, annullamento, invito con QR, fine, podio e risultato da condividere
+appId: com.stevatero.sushistreakapp.preview
+name: Partita da solo
+env:
+  BACKEND_URL: http://localhost:3000
+---
+- runFlow:
+    file: ../subflows/crea-partita.yaml
+    env:
+      NAME: Anna
+      SESSION: E2E-SOLO
+- tapOn:
+    id: add-piece
+- tapOn:
+    id: add-piece
+- tapOn:
+    id: add-piece
+- assertVisible:
+    id: my-score
+    text: '3'
+- tapOn:
+    id: undo-piece
+- assertVisible:
+    id: my-score
+    text: '2'
+
+# Invito: codice QR con il link della partita
+- tapOn: Condividi la sessione
+- assertVisible: Codice QR per entrare nella partita E2E-SOLO
+- assertVisible: Copia codice
+- pressKey: back
+
+# Fine: da soli la partita si chiude subito, con il podio
+- tapOn:
+    id: finish-game
+- tapOn: Sì, ho finito!
+- extendedWaitUntil:
+    visible: Classifica finale
+    timeout: 20000
+- assertVisible: Vince Anna con 2 pezzi!
+
+# Il server ha registrato i pezzi senza doppioni
+- runScript:
+    file: ../scripts/api.js
+    env:
+      ACTION: info
+      SESSION: E2E-SOLO
+- assertTrue: ${output.session.status == 'ended' && output.session.firstScore == 2}
+
+# Immagine del risultato: si apre il foglio di condivisione del sistema
+- tapOn:
+    id: final-share-result
+- extendedWaitUntil:
+    visible: Condividi immagine
+    timeout: 10000
+- tapOn: Condividi immagine
+- waitForAnimationToEnd:
+    timeout: 5000
+- pressKey: back
+- assertVisible: Condividi immagine
