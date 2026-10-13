@@ -27,7 +27,7 @@ env:
 
 - tapOn: Termina la partita per tutti
 - assertVisible: Terminare la partita per tutti?
-- assertVisible: '1 giocatore non ha ancora finito.*'
+- assertVisible: 'Ospite non ha ancora finito.*'
 - tapOn: Termina la partita
 - extendedWaitUntil:
     visible: Classifica finale

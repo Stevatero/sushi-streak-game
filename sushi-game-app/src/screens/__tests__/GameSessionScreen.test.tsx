@@ -310,12 +310,20 @@ describe('GameSessionScreen', () => {
 
     it("l'host termina la partita per tutti dopo una conferma", async () => {
       await renderWithProviders(<GameSessionScreen />);
-      serverEmit('session', { ...snapshot(), hostId: 'p1' });
+      // Luca non ha ancora finito; chi termina la partita non viene contato
+      serverEmit('session', {
+        ...snapshot(),
+        hostId: 'p1',
+        players: [
+          { id: 'p1', name: 'Anna', score: 3, finished: false },
+          { id: 'p2', name: 'Luca', score: 5, finished: false },
+        ],
+      });
       features();
 
       fireEvent.press(screen.getByText('Termina la partita per tutti'));
       expect(screen.getByText('Terminare la partita per tutti?')).toBeTruthy();
-      expect(screen.getByText(/1 giocatore non ha ancora finito/)).toBeTruthy();
+      expect(screen.getByText(/^Luca non ha ancora finito: verrà segnato come finito/)).toBeTruthy();
       await act(async () => {
         fireEvent.press(screen.getByText('Termina la partita'));
       });
