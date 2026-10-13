@@ -429,13 +429,20 @@ const GameSessionScreen = () => {
 
   // L'host chiude la partita per tutti, ad esempio se qualcuno si è dimenticato di toccare "Ho finito"
   const confirmEndSession = () => {
-    const waiting = players.filter((p) => !p.finished).length;
+    // Gli altri giocatori che non hanno ancora finito: per nome se sono pochi
+    const waiting = players.filter((p) => !p.finished && p.id !== playerId).map((p) => p.name);
+    const names =
+      waiting.length > 3
+        ? `${waiting.length} giocatori`
+        : waiting.length > 1
+          ? `${waiting.slice(0, -1).join(', ')} e ${waiting[waiting.length - 1]}`
+          : waiting[0];
     const message =
-      waiting === 0
+      waiting.length === 0
         ? 'Comparirà il podio con la classifica finale.'
-        : waiting === 1
-          ? '1 giocatore non ha ancora finito: verrà segnato come finito con i pezzi che ha e comparirà il podio.'
-          : `${waiting} giocatori non hanno ancora finito: verranno segnati come finiti con i pezzi che hanno e comparirà il podio.`;
+        : waiting.length === 1
+          ? `${names} non ha ancora finito: verrà segnato come finito con i pezzi che ha e comparirà il podio.`
+          : `${names} non hanno ancora finito: verranno segnati come finiti con i pezzi che hanno e comparirà il podio.`;
     showDialog({
       seal: '終',
       kanji: 'おしまい',
