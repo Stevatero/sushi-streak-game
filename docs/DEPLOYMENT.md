@@ -31,6 +31,8 @@ pm2 save
 
 Le migrazioni del database vengono applicate automaticamente all'avvio (es. la 1.3.0 aggiunge la colonna `sessions.host_id`; per le partite già esistenti l'host è il primo giocatore entrato). Aggiorna il backend **prima** di distribuire una nuova versione dell'app che ne usa le funzioni: l'app 1.3.0 funziona anche con il backend 1.2.0, ma la rimozione dei giocatori richiede il backend 1.3.0. Il backend 1.4.0 non cambia il protocollo né il database: aggiunge il supporto agli Universal Links iOS e ai link all'App Store nella pagina di invito. Il backend 1.4.1 legge la configurazione da `sushi-game-backend/.env`. Il backend 1.7.0 aggiunge le colonne `sessions.started_at` e `sessions.kicked_names` e limita per IP anche le letture pubbliche e l'ingresso via socket: dietro nginx serve `X-Forwarded-For` anche sulla connessione WebSocket (vedi la configurazione sotto).
 
+Il backend **1.8.0** va distribuito prima dell'app 1.8.0 ed è compatibile con l'app 1.7 già installata. Aggiunge la colonna `players.last_seq` (pezzi numerati, senza doppioni), `sessions.closed_by` e la tabella `crash_reports`; l'evento `end_session` (l'host termina la partita), la chiusura automatica delle partite ferme, il passaggio del ruolo di host, l'endpoint `POST /api/crash-reports` e il controllo facoltativo della versione minima dell'app. L'ultima attività delle partite viene salvata al più ogni 30 secondi: dopo un riavvio improvviso la scadenza per inattività può anticipare di qualche secondo.
+
 ### Variabili d'ambiente
 
 La configurazione del server va in **`sushi-game-backend/.env`** (formato `NOME=valore`, una variabile per riga), creato da [`.env.example`](../sushi-game-backend/.env.example). Il file è escluso da git e resta solo sul server: proteggilo con `chmod 600 .env`, perché è letto solo dall'utente che esegue PM2. Il server lo carica all'avvio (dal backend 1.4.1), e lo usa anche `npm run backup`. Le variabili già presenti nell'ambiente del processo (PM2, shell) hanno la precedenza sul file. Dopo ogni modifica riavvia con `pm2 restart sushi-streak-backend --update-env`.
@@ -43,6 +45,17 @@ In produzione impostare almeno:
 - `APPLE_TEAM_ID` (per iOS): Team ID Apple, abilita `/.well-known/apple-app-site-association` per gli Universal Links
 - `IOS_APP_STORE_URL` (facoltativa, dopo la pubblicazione su App Store): link di download su iPhone e Smart App Banner nella pagina di invito
 - `DB_PATH`: percorso del database fuori dalla cartella del codice (es. `/var/lib/sushi-streak/sushi_game.db`)
+
+Facoltative, con default adatti alla produzione (dal backend 1.8.0):
+
+| Variabile              | Default | Descrizione                                                                                                      |
+| ---------------------- | ------- | ---------------------------------------------------------------------------------------------------------------- |
+| `SESSION_AUTO_END_MIN` | `45`    | Minuti senza nuovi pezzi dopo cui una partita, in cui almeno metà dei giocatori ha finito, si chiude (`0` = mai) |
+| `HOST_TRANSFER_MIN`    | `15`    | Minuti di assenza dell'host dopo cui il ruolo passa al primo giocatore connesso (`0` = mai)                      |
+| `MIN_APP_VERSION`      | vuota   | Versione minima dell'app (es. `1.8.0`); le precedenti ricevono "aggiorna l'app"                                  |
+| `CRASH_RETENTION_DAYS` | `30`    | Giorni di conservazione delle segnalazioni di errore                                                             |
+
+**`MIN_APP_VERSION`**: lasciala vuota finché la maggior parte dei giocatori non ha aggiornato l'app. Le app 1.7 e precedenti non indicano la propria versione: con un minimo impostato non possono più creare né raggiungere partite (vedono il messaggio di aggiornamento solo creando o entrando in una partita; in una partita già aperta restano in "Riconnessione…"). Serve per una versione **MAJOR** del protocollo o per escludere un'app con un problema grave.
 
 Non aggiungere variabili in `ecosystem.config.js` sul server: è versionato, e una modifica locale blocca `git pull`. Se una vecchia installazione le contiene, spostale in `.env` e ripristina il file con `git checkout -- ecosystem.config.js`. Le variabili di `env_production` in `ecosystem.config.js` (es. `PORT`, `HOST`) valgono comunque più del file `.env`.
 
@@ -81,6 +94,7 @@ Assicurarsi che la porta 3005 **non** sia raggiungibile dall'esterno (firewall),
 
 - **Health check**: `GET https://sushi.dietalab.net/api/health` → `200` con `database: "ok"`, `503` se il database non risponde. Collegarlo a un servizio di uptime monitoring (es. UptimeRobot, Better Stack) con avviso via email.
 - **Log**: righe JSON su stdout/stderr (`pm2 logs sushi-streak-backend`); livello con `LOG_LEVEL`. Consigliata la rotazione con `pm2 install pm2-logrotate`.
+- **Segnalazioni di errore dell'app** (inviate solo dagli utenti che le hanno attivate): nei log compare una riga `Segnalazione di errore dall'app` con numero, versione e piattaforma; i dettagli (messaggio e stack) sono nel database. Per leggerle: `cd sushi-game-backend && npm run crash-reports` (ultime 20) o `npm run crash-reports -- 50`. Vengono cancellate dopo `CRASH_RETENTION_DAYS` giorni e ne restano al massimo 5000.
 
 ## Backup e ripristino
 

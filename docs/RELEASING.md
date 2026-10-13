@@ -38,14 +38,15 @@ PR con nuova versione → merge in main → CI verde → tag vX.Y.Z → GitHub R
    cd ../sushi-game-backend && npm version minor --no-git-tag-version
    ```
 2. In `CHANGELOG.md` sposta le voci di `Unreleased` in una nuova sezione `## [X.Y.Z] - AAAA-MM-GG` e aggiorna i link in fondo.
-3. Unisci la PR (rebase) quando la CI è verde.
-4. Sul push in `main` gira la **CI**. Quando è verde, il workflow **Release automatica** ([`auto-release.yml`](../.github/workflows/auto-release.yml)):
+3. Per le modifiche all'app aggiungi alla PR l'etichetta **`e2e`**: il workflow **E2E Android** compila l'APK e prova i flussi principali con Maestro su un emulatore, contro un backend locale (circa 30-40 minuti).
+4. Unisci la PR (rebase) quando la CI (e gli E2E) sono verdi.
+5. Sul push in `main` gira la **CI**. Quando è verde, il workflow **Release automatica** ([`auto-release.yml`](../.github/workflows/auto-release.yml)):
    - se la versione di `sushi-game-app/package.json` ha già un tag `vX.Y.Z` non fa nulla (i push senza cambio di versione, es. solo documentazione, non producono release);
    - se `main` è andato avanti durante la CI, lascia decidere alla CI del commit più recente;
    - verifica che app e backend abbiano la stessa versione e che il CHANGELOG abbia la sezione `[X.Y.Z]`;
    - crea il tag annotato `vX.Y.Z` sul commit e richiama il workflow **Release**.
-5. **Release** ([`release.yml`](../.github/workflows/release.yml)) crea la GitHub Release (pre-release) con le note del CHANGELOG, avvia la build AAB di produzione su EAS, ne **attende la fine** e invia **quella build** (`eas submit --id`) alla traccia **Test interno** del Google Play con stato `completed`: i tester la ricevono dal Play Store senza passaggi manuali.
-6. Dalla Play Console promuovi la release dalla traccia interna alla **chiusa** e poi alla **produzione**.
+6. **Release** ([`release.yml`](../.github/workflows/release.yml)) crea la GitHub Release (pre-release) con le note del CHANGELOG, avvia la build AAB di produzione su EAS, ne **attende la fine** e invia **quella build** (`eas submit --id`) alla traccia **Test interno** del Google Play con stato `completed`: i tester la ricevono dal Play Store senza passaggi manuali.
+7. Dalla Play Console promuovi la release dalla traccia interna alla **chiusa** e poi alla **produzione**. Se la versione cambia i dati trattati (es. la 1.8.0 con le segnalazioni di errore facoltative), aggiorna prima il modulo **Sicurezza dei dati** secondo [DATA_SAFETY.md](DATA_SAFETY.md).
 
 La pipeline richiede i secret `EXPO_TOKEN` e `GOOGLE_SERVICE_ACCOUNT_KEY` (vedi [Secrets richiesti](#secrets-richiesti)). Senza `EXPO_TOKEN` si crea solo la GitHub Release; senza la chiave del service account la release automatica si ferma prima di avviare la build, con un errore che indica il secret mancante.
 
@@ -62,6 +63,10 @@ La pipeline richiede i secret `EXPO_TOKEN` e `GOOGLE_SERVICE_ACCOUNT_KEY` (vedi 
 **versionCode**: lo gestisce EAS (`appVersionSource: remote` e `autoIncrement` nel profilo `production`) e sale di uno a ogni build di produzione (la 1.6.0 è il 5). Non caricare sul Play Store bundle compilati fuori da EAS: userebbero un altro `versionCode`. Se serve riallinearlo: `npx eas-cli build:version:set -p android`.
 
 > Se il rilascio include modifiche al backend, distribuisci **prima** il backend (vedi [DEPLOYMENT.md](DEPLOYMENT.md)) e poi l'app.
+
+> Aggiornamenti over-the-air (EAS Update) non usati di proposito: l'app contatterebbe i server di Expo a ogni avvio, con un ID dell'installazione, contro l'impostazione "nessuna chiamata a terze parti" (vedi [DATA_SAFETY.md](DATA_SAFETY.md)). Ogni correzione passa da una nuova build sullo store.
+
+> Per costringere ad aggiornare le app troppo vecchie (versione MAJOR del protocollo o problema grave) imposta `MIN_APP_VERSION` sul backend (vedi [DEPLOYMENT.md](DEPLOYMENT.md#variabili-dambiente)).
 
 ## Ambienti
 

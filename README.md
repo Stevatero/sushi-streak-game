@@ -12,7 +12,7 @@
 
 <p align="center">
   <a href="https://github.com/Stevatero/sushi-streak-game/actions/workflows/ci.yml"><img src="https://github.com/Stevatero/sushi-streak-game/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/versione-1.6.1-C94330" alt="Versione 1.6.1"></a>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/github/package-json/v/Stevatero/sushi-streak-game?filename=sushi-game-app%2Fpackage.json&label=versione&color=C94330" alt="Versione"></a>
   <img src="https://img.shields.io/badge/Expo_SDK-57-000020?logo=expo" alt="Expo SDK 57">
   <img src="https://img.shields.io/badge/Android-API_24%E2%80%9336-3DDC84?logo=android&logoColor=white" alt="Android API 24-36">
   <img src="https://img.shields.io/badge/iOS-16.4%2B-000000?logo=apple&logoColor=white" alt="iOS 16.4+">
@@ -69,34 +69,38 @@ Le build per versione sono nelle [release](https://github.com/Stevatero/sushi-st
 
 **Partite multigiocatore in tempo reale**
 
-- Crea una partita con un codice (generato o personalizzato) e invita gli amici con codice o link (`https://sushi.dietalab.net/join/CODICE`); il pulsante **Incolla** riconosce anche un link di invito copiato.
+- Crea una partita con un codice (generato o personalizzato) e invita gli amici con il **codice QR** da inquadrare al tavolo, con il link (`https://sushi.dietalab.net/join/CODICE`) o con il codice; il pulsante **Incolla** riconosce anche un link di invito copiato. Un codice scelto a mano troppo corto viene segnalato, perché facile da indovinare.
 - Classifica condivisa aggiornata in tempo reale via WebSocket, con la tua posizione e il tuo punteggio in grande.
-- **+1** per ogni pezzo mangiato, con suono, animazione e una pila di sushi che cade e si accumula con una fisica simulata sul thread UI: fluida anche con decine di pezzi. **Annulla** corregge un tocco accidentale: l'ultimo pezzo svanisce dalla pila con un "bop".
-- Chi crea la partita (👑) può rimuovere un giocatore toccandolo in classifica, per esempio chi è entrato indovinando il codice.
-- **Ho finito** (con una conferma che riepiloga pezzi e posizione): la partita termina quando tutti hanno finito, con podio, classifica finale, pareggi gestiti e una pioggia di petali di ciliegio per chi vince.
+- **+1** per ogni pezzo mangiato, con suono, vibrazione leggera, animazione e una pila di sushi che cade e si accumula con una fisica simulata sul thread UI: fluida anche con decine di pezzi. **Annulla** corregge un tocco accidentale: l'ultimo pezzo svanisce dalla pila con un "bop".
+- Chi gestisce la partita (👑, all'inizio chi l'ha creata) può rimuovere un giocatore toccandolo in classifica, per esempio chi è entrato indovinando il codice, e **terminare la partita per tutti** se qualcuno si dimentica di toccare "Ho finito". Se resta assente per 15 minuti il ruolo passa al primo giocatore connesso.
+- **Ho finito** (con una conferma che riepiloga pezzi e posizione): la partita termina quando tutti hanno finito, con podio, classifica finale, pareggi gestiti e una pioggia di petali di ciliegio per chi vince. Una partita ferma da 45 minuti, in cui almeno metà dei giocatori ha finito, si chiude da sola.
+- **Risultato come immagine**: una card con podio, vincitore, ristorante e data da condividere nel gruppo della cena, a fine partita o dallo storico.
 - Pagina web di invito con la stessa grafica dell'app, che apre l'app o porta allo store se non è installata (Google Play su Android, App Store su iPhone quando sarà pubblicata).
 - Conferme e avvisi in pannelli nello stile dell'app, uguali su Android e iOS.
 
 **Affidabilità**
 
-- Riconnessione automatica dopo cadute di rete o il ritorno dall'app in background, con indicatore dello stato di connessione.
+- **Pezzi anche senza rete**: offline i pezzi restano sul telefono, contano subito e partono da soli alla riconnessione, numerati in modo che il server non li conti mai due volte (nemmeno dopo un timeout).
+- Riconnessione automatica dopo cadute di rete o il ritorno dall'app in background, con indicatore dello stato di connessione e dei pezzi ancora da inviare.
 - Partita riprendibile dalla Home anche dopo la chiusura forzata dell'app o un riavvio del server.
 - Le partite restano aperte fino a 3 ore senza attività (configurabile).
 
 **Storico e preferenze**
 
 - Salvataggio automatico delle partite sul dispositivo, con durata, ristorante facoltativo e un riepilogo (partite, pezzi mangiati, record).
-- Tema sistema/chiaro/scuro e suoni attivabili, con preferenze salvate.
+- Tema sistema/chiaro/scuro, suoni e vibrazione attivabili, con preferenze salvate.
 - Cancellazione dei dati locali e informativa privacy dalle Impostazioni.
+- Segnalazioni di errore **facoltative** (disattivate di default), inviate al nostro server senza dati dei giocatori.
+- Se il server richiede una versione più recente dell'app, l'app lo spiega e porta allo store.
 
 L'app non richiede registrazione e non contiene pubblicità, analytics o tracciamento.
 
 ## Come si gioca
 
-1. Un giocatore apre **Crea**, sceglie il proprio nome e tocca **Crea partita**, poi invita gli altri con il link o il codice.
-2. Gli altri aprono il link, oppure in **Partecipa** incollano o scrivono il codice.
-3. Ognuno tocca **+1** per ogni pezzo mangiato: la classifica si aggiorna per tutti e la pila di sushi cresce.
-4. Quando hai finito tocca **Ho finito**; quando tutti hanno finito compaiono il podio e il vincitore, e la partita finisce nello storico.
+1. Un giocatore apre **Crea**, sceglie il proprio nome e tocca **Crea partita**, poi invita gli altri con il codice QR, il link o il codice.
+2. Gli altri inquadrano il QR o aprono il link, oppure in **Partecipa** incollano o scrivono il codice.
+3. Ognuno tocca **+1** per ogni pezzo mangiato: la classifica si aggiorna per tutti e la pila di sushi cresce (anche se la rete del ristorante va e viene).
+4. Quando hai finito tocca **Ho finito**; quando tutti hanno finito (o chi gestisce la partita la termina) compaiono il podio e il vincitore, e la partita finisce nello storico, pronta da condividere come immagine.
 
 ## Design
 
@@ -125,37 +129,40 @@ Il design system è in `sushi-game-app/src/theme/theme.ts` (palette, tipografia,
 
 ## Stack tecnologico
 
-| Componente       | Tecnologie                                                                                     |
-| ---------------- | ---------------------------------------------------------------------------------------------- |
-| App              | Expo SDK 57, React Native 0.86 (New Architecture, Hermes), React 19.2, TypeScript 6 strict     |
-| UI e navigazione | Design system proprio su React Native Paper (Material 3), React Navigation 7, Reanimated 4     |
-| Animazioni       | Motore fisico della pila di sushi scritto come worklet sul thread UI; festa con petali animati |
-| Stato e dati     | Zustand, AsyncStorage, Socket.IO client                                                        |
-| Backend          | Node.js ≥ 20, Express 4, Socket.IO 4, SQLite (`sqlite3`), Helmet                               |
-| Qualità          | Jest + Testing Library, node:test, ESLint, Prettier, TypeScript                                |
-| Delivery         | EAS Build/Submit, GitHub Actions (CI, release, APK di test), Dependabot, PM2 + nginx           |
+| Componente       | Tecnologie                                                                                        |
+| ---------------- | ------------------------------------------------------------------------------------------------- |
+| App              | Expo SDK 57, React Native 0.86 (New Architecture, Hermes), React 19.2, TypeScript 6 strict        |
+| UI e navigazione | Design system proprio su React Native Paper (Material 3), React Navigation 7, Reanimated 4        |
+| Animazioni       | Motore fisico della pila di sushi scritto come worklet sul thread UI; festa con petali animati    |
+| Stato e dati     | Zustand, AsyncStorage, Socket.IO client con coda dei pezzi numerati                               |
+| Condivisione     | Codice QR (`react-native-svg`), immagine del risultato (`react-native-view-shot`, `expo-sharing`) |
+| Backend          | Node.js ≥ 20, Express 4, Socket.IO 4, SQLite (`sqlite3`), Helmet                                  |
+| Qualità          | Jest + Testing Library, node:test, Maestro (E2E su emulatore), ESLint, Prettier, TypeScript       |
+| Delivery         | EAS Build/Submit, GitHub Actions (CI, release, APK di test), Dependabot, PM2 + nginx              |
 
 ## Architettura
 
 ```
 ┌──────────────────────────── App (Expo / React Native) ────────────────────────────┐
 │ Screens (Home, Partita, Storico, Impostazioni) + design system (theme, ui/)       │
-│   ├── gameStore (Zustand) ◀── socketService ── riconnessione, rejoin, ack/timeout │
+│   ├── gameStore (Zustand) ◀── socketService ── riconnessione, rejoin, coda pezzi  │
 │   ├── api (REST, timeout, errori tipizzati)                                       │
 │   ├── sessionStorage / preferences (AsyncStorage, dati validati)                  │
 │   └── SushiStack ── fisica worklet sul thread UI (Reanimated frame callback)      │
 └───────────────┬───────────────────────────────────────────────┬───────────────────┘
-                │ HTTPS  POST /api/sessions, /join, GET /info   │ WSS  join_session, add_piece, remove_piece,
-                ▼                                               ▼      player_finished, kick_player
+                │ HTTPS  POST /api/sessions, /join, GET /info,  │ WSS  join_session, add_piece, remove_piece,
+                │        POST /api/crash-reports (facoltativo)  │      player_finished, kick_player, end_session
+                ▼                                               ▼
 ┌──────────────────────────── Backend (Node.js) ────────────────────────────────────┐
 │ Express (validazione, rate limit, Helmet/CSP) · Socket.IO (auth con token)        │
 │ Stato partite in memoria + persistenza SQLite · modifiche serializzate per giocatore│
-│ Chiusura e pulizia automatiche · Pagine web: /join/:codice, /privacy · /api/health │
+│ Chiusura automatica e passaggio dell'host · /join/:codice, /privacy, /api/health  │
 └────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 - Il server è la fonte di verità della partita; il client applica gli snapshot ricevuti (`session_update`, `game_ended`, `session_expired`, `player_kicked`).
-- Ogni giocatore riceve `playerId` + `playerToken` alla creazione/ingresso: il socket si autentica con questi e le azioni valgono solo per il giocatore autenticato. Chi crea la partita è l'host (`hostId`) e può rimuovere gli altri giocatori.
+- Ogni giocatore riceve `playerId` + `playerToken` alla creazione/ingresso: il socket si autentica con questi e le azioni valgono solo per il giocatore autenticato. Chi crea la partita è l'host (`hostId`): può rimuovere gli altri giocatori e terminare la partita per tutti (`end_session`); se resta assente il ruolo passa al primo giocatore connesso.
+- **Pezzi numerati**: l'app invia ogni pezzo con un numero progressivo (`seq`) e il server ignora quelli già applicati, salvando punteggio e numero nella stessa scrittura. Così un pezzo rinviato dopo un timeout, una riconnessione o un riavvio del server non viene mai contato due volte, e l'app può registrare i pezzi anche offline. Il server dichiara le funzioni disponibili (`features`) quando l'app entra in partita: con un server precedente l'app si comporta come prima.
 - Le modifiche di ogni giocatore passano da una coda: si scrive prima su SQLite e poi in memoria, senza perdere tocchi ravvicinati. Dopo un riavvio le partite vengono ricaricate dal database.
 - **Pila di sushi**: ogni pezzo è un cerchio in un piccolo motore fisico (Verlet a passo fisso, attrito di Coulomb, pezzi a riposo statici) eseguito nel frame callback di Reanimated. I pezzi leggono la posizione direttamente dallo stato condiviso, senza render React per frame; quando la pila è ferma la simulazione si spegne.
 
@@ -170,23 +177,25 @@ sushi-streak-game/
 │   ├── assets/                  Icone, splash, suoni, immagini del sushi, motivo seigaiha
 │   ├── scripts/                 Varianti di build, versionCode dalla versione
 │   └── src/
-│       ├── components/          SushiStack, SakuraCelebration, ErrorBoundary
+│       ├── components/          SushiStack, SakuraCelebration, ErrorBoundary, InviteSheet, ResultCard…
 │       │   ├── sushiStack/      Motore fisico (worklet) e forme dei pezzi
-│       │   └── ui/              Design system: AppButton, Panel, Field, Sheet, ConfirmSheet, Hanko, Seigaiha…
+│       │   └── ui/              Design system: AppButton, Panel, Field, Sheet, ConfirmSheet, Hanko, QrCode…
 │       ├── hooks/               useExclusiveModal (una finestra alla volta)
 │       ├── navigation/          Stack e tipi delle rotte
 │       ├── screens/             Home, GameSession, SessionHistory, Settings
-│       ├── services/            api, socketService, sessionStorage, preferences, shareService
+│       │   └── gameSession/     Parti della schermata di gioco e salvataggio nello storico
+│       ├── services/            api, socketService, sessionStorage, preferences, shareService, crashReporter
 │       ├── store/               gameStore (Zustand)
 │       ├── theme/               Palette, tipografia, temi chiaro/scuro e provider
-│       └── utils/               logger, sessionCode, SoundManager
+│       └── utils/               logger, sessionCode, ranking, haptics, SoundManager
+│   └── e2e/                     Test end-to-end Maestro (flussi, sottoflussi, script)
 ├── sushi-game-backend/          Server Node.js
 │   ├── server.js                API REST, Socket.IO, manutenzione sessioni
 │   ├── db.js                    Schema e migrazioni SQLite
 │   ├── joinPage.js              Pagina web di invito
 │   ├── privacyPage.js           Informativa privacy (/privacy)
 │   ├── logger.js                Log strutturati JSON
-│   ├── scripts/backup.js        Backup consistente del database
+│   ├── scripts/                 Backup consistente del database, lettura delle segnalazioni di errore
 │   └── test/                    Test di integrazione (node:test)
 ├── docs/                        Release, deploy, privacy / Data Safety, screenshot, asset Play Store
 ├── .github/                     CI, release, APK di test, Dependabot, template
@@ -240,6 +249,10 @@ All'avvio il server legge `sushi-game-backend/.env`, se esiste (anche `npm run b
 | `DB_PATH`                | `sushi_game.db` accanto a `server.js` | Database SQLite                                                  |
 | `SESSION_INACTIVITY_MIN` | `180`                                 | Minuti di inattività prima della chiusura di una sessione        |
 | `SESSION_RETENTION_DAYS` | `30`                                  | Giorni di conservazione delle sessioni chiuse                    |
+| `SESSION_AUTO_END_MIN`   | `45`                                  | Minuti senza pezzi prima della chiusura automatica (`0` = mai)   |
+| `HOST_TRANSFER_MIN`      | `15`                                  | Minuti di assenza dell'host prima del passaggio del ruolo        |
+| `MIN_APP_VERSION`        | —                                     | Versione minima dell'app accettata (vuota = tutte)               |
+| `CRASH_RETENTION_DAYS`   | `30`                                  | Giorni di conservazione delle segnalazioni di errore             |
 | `CORS_ORIGINS`           | localhost + dominio pubblico          | Origini web ammesse                                              |
 | `TRUST_PROXY`            | `loopback`                            | Proxy fidati (nginx sulla stessa macchina)                       |
 | `LOG_LEVEL`              | `info`                                | `debug` / `info` / `warn` / `error` / `silent`                   |
@@ -261,16 +274,20 @@ cd sushi-game-app
 npm run check          # lint + typecheck + formattazione + test
 npm run icons          # rigenera icone, splash e grafica Google Play da assets/source/*.svg
 npm run test:ci        # test con coverage
+npm run audit:check    # vulnerabilità high/critical (con le eccezioni motivate di audit-allowlist.json)
 
 # Backend
 cd sushi-game-backend
 npm run lint && npm run format:check && npm test
+npm run test:coverage  # test con copertura
+npm run crash-reports  # ultime segnalazioni di errore inviate dall'app
 ```
 
 I test coprono le parti a maggior rischio di regressione:
 
-- **App**: motore fisico della pila (stabilità, pezzi sospesi, bordi, tempi di assestamento) e sincronizzazione tra punteggio e pezzi; validazione dei codici e deep link; client API; riconnessione e rejoin del socket; store di gioco; storage con dati corrotti o legacy; error boundary; flussi Home (creazione, ingresso, doppio tocco, incolla) e Partita (pezzi online/offline, annullamento con suono, conferme di fine e di uscita, pareggi, rimozione dei giocatori, salvataggio automatico); pannello di conferma e apertura delle finestre una alla volta; versionCode.
-- **Backend**: autenticazione con token, robustezza agli eventi malformati, tocchi concorrenti senza perdite, rimozione dei giocatori e permessi dell'host, fine partita, ricarica dopo riavvio, XSS e CSP delle pagine web, link della pagina di invito (Android e iOS), Universal Links, health check, backup.
+- **App**: motore fisico della pila (stabilità, pezzi sospesi, bordi, tempi di assestamento) e sincronizzazione tra punteggio e pezzi; validazione dei codici e deep link; client API; riconnessione e rejoin del socket; coda dei pezzi (offline, numerazione, nessun doppione dopo timeout e riconnessione, pezzi scartati a partita chiusa, "Ho finito" dopo l'invio); store di gioco; storage con dati corrotti o legacy; error boundary; segnalazioni di errore (consenso, invio unico, errori fatali al riavvio); vibrazione; classifica e codice QR; flussi Home (creazione, ingresso, doppio tocco, incolla, codici corti, aggiornamento richiesto) e Partita (pezzi online/offline, annullamento con suono, conferme di fine e di uscita, pareggi, rimozione dei giocatori, chiusura da parte dell'host, passaggio del ruolo, immagine del risultato, salvataggio automatico); pannello di conferma e apertura delle finestre una alla volta; versionCode e controllo delle vulnerabilità.
+- **Backend**: autenticazione con token, robustezza agli eventi malformati, tocchi concorrenti senza perdite, pezzi numerati senza doppioni (anche dopo un riavvio), rimozione dei giocatori e permessi dell'host, fine partita, chiusura da parte dell'host e automatica, passaggio del ruolo di host, versione minima dell'app, segnalazioni di errore (limiti e conservazione), salvataggio differito dell'attività, ricarica dopo riavvio, XSS e CSP delle pagine web, link della pagina di invito (Android e iOS), Universal Links, health check, backup.
+- **End-to-end** (Maestro su emulatore Android, backend locale): partita da soli con QR e immagine del risultato, ingresso con il link, chiusura da parte dell'host, pezzi registrati in modalità aereo.
 
 ## Versioni, build e rilasci
 
@@ -299,17 +316,18 @@ Procedura completa e checklist Play Store e App Store: **[docs/RELEASING.md](doc
 
 ## CI/CD
 
-| Workflow                                         | Quando                       | Cosa fa                                                                                                                                                                                               |
-| ------------------------------------------------ | ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [CI](.github/workflows/ci.yml)                   | Push su `main`, pull request | Backend (Node 20 e 22): lint, formattazione, test, audit. App: lint, typecheck, formattazione, test con coverage, expo-doctor, build dei bundle Android e iOS, audit. Scansione secrets con gitleaks. |
-| [Release](.github/workflows/release.yml)         | Tag `vX.Y.Z`                 | Verifica versione e CHANGELOG, crea la GitHub Release e, con `EXPO_TOKEN` configurato, avvia la build AAB su EAS (submit opzionale).                                                                  |
-| [APK Android](.github/workflows/android-apk.yml) | Manuale (Run workflow)       | Compila un APK di test (`preview` o `production`, completo o solo arm64) senza EAS e lo pubblica nelle pre-release `apk-<variante>-vX.Y.Z` e `apk-<variante>-latest`.                                 |
-| [Dependabot](.github/dependabot.yml)             | Settimanale                  | Aggiornamenti raggruppati di dipendenze e GitHub Actions (Expo/React Native esclusi: si aggiornano con l'SDK).                                                                                        |
+| Workflow                                         | Quando                             | Cosa fa                                                                                                                                                                                                                                    |
+| ------------------------------------------------ | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [CI](.github/workflows/ci.yml)                   | Push su `main`, pull request       | Backend (Node 20 e 22): lint, formattazione, test con copertura, audit. App: lint, typecheck, formattazione, test con coverage, expo-doctor, build dei bundle Android e iOS, audit con eccezioni motivate. Scansione secrets con gitleaks. |
+| [E2E Android](.github/workflows/e2e-android.yml) | Etichetta `e2e` su una PR, manuale | APK x86_64 con backend locale e test Maestro su emulatore Android: partita, invito, chiusura da parte dell'host, pezzi offline.                                                                                                            |
+| [Release](.github/workflows/release.yml)         | Tag `vX.Y.Z`                       | Verifica versione e CHANGELOG, crea la GitHub Release e, con `EXPO_TOKEN` configurato, avvia la build AAB su EAS (submit opzionale).                                                                                                       |
+| [APK Android](.github/workflows/android-apk.yml) | Manuale (Run workflow)             | Compila un APK di test (`preview` o `production`, completo o solo arm64) senza EAS e lo pubblica nelle pre-release `apk-<variante>-vX.Y.Z` e `apk-<variante>-latest`.                                                                      |
+| [Dependabot](.github/dependabot.yml)             | Settimanale                        | Aggiornamenti raggruppati di dipendenze e GitHub Actions (Expo/React Native esclusi: si aggiornano con l'SDK).                                                                                                                             |
 
 ## Sicurezza e privacy
 
 - Comunicazione solo HTTPS/WSS; token dei giocatori conservati come hash sul server; validazione degli input e rate limiting; Helmet e CSP con nonce.
-- Nessun account, nessun analytics o SDK pubblicitario; i dati delle partite vengono cancellati automaticamente dopo 30 giorni dalla chiusura, e subito per un giocatore rimosso dall'host.
+- Nessun account, nessun analytics o SDK pubblicitario, nessun aggiornamento over-the-air; i dati delle partite vengono cancellati automaticamente dopo 30 giorni dalla chiusura, e subito per un giocatore rimosso dall'host. Le segnalazioni di errore sono facoltative, vanno al nostro server e vengono cancellate dopo 30 giorni.
 - Informativa: [sushi.dietalab.net/privacy](https://sushi.dietalab.net/privacy) · Inventario dei dati e questionario Data Safety: [docs/DATA_SAFETY.md](docs/DATA_SAFETY.md).
 - Segnalazione di vulnerabilità: [SECURITY.md](SECURITY.md).
 
@@ -321,7 +339,9 @@ Procedura completa e checklist Play Store e App Store: **[docs/RELEASING.md](doc
 - [x] Nuova icona e splash screen nello stile della nuova interfaccia
 - [ ] Prima pubblicazione su Google Play (traccia interna → chiusa → produzione)
 - [x] Aggiornamento a Expo SDK 57 (risolve gli advisory "high" delle dipendenze di build)
-- [ ] Crash reporting opt-in (es. Sentry) tramite l'hook già presente in `src/utils/logger.ts`
+- [x] Segnalazioni di errore facoltative verso il nostro server (senza terze parti)
+- [x] Pezzi registrati anche offline, chiusura della partita da parte dell'host, inviti con QR e risultato come immagine
+- [x] Test end-to-end su emulatore Android
 - [ ] Localizzazione in inglese
 - [x] Supporto iOS nel codice e nella configurazione (build EAS, Universal Links, pagina di invito)
 - [ ] Prima pubblicazione sull'App Store (serve l'account Apple Developer)
