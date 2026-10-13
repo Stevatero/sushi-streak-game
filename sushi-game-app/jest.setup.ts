@@ -36,3 +36,35 @@ jest.mock('expo-screen-orientation', () => ({
   lockAsync: jest.fn(() => Promise.resolve()),
   unlockAsync: jest.fn(() => Promise.resolve()),
 }));
+
+jest.mock('expo-haptics', () => ({
+  AndroidHaptics: {
+    Virtual_Key: 'virtual-key',
+    Keyboard_Tap: 'keyboard-tap',
+    Confirm: 'confirm',
+    Long_Press: 'long-press',
+  },
+  ImpactFeedbackStyle: { Light: 'light' },
+  NotificationFeedbackType: { Success: 'success' },
+  performAndroidHapticsAsync: jest.fn(() => Promise.resolve()),
+  impactAsync: jest.fn(() => Promise.resolve()),
+  selectionAsync: jest.fn(() => Promise.resolve()),
+  notificationAsync: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('expo-sharing', () => ({
+  isAvailableAsync: jest.fn(() => Promise.resolve(true)),
+  shareAsync: jest.fn(() => Promise.resolve()),
+}));
+
+jest.mock('react-native-view-shot', () => ({
+  captureRef: jest.fn(() => Promise.resolve('file:///tmp/sushi-streak-risultato.png')),
+}));
+
+// Disegno SVG (codice QR) sostituito da semplici View
+jest.mock('react-native-svg', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  const Mock = ({ children, ...props }: { children?: React.ReactNode }) => React.createElement(View, props, children);
+  return { __esModule: true, default: Mock, Svg: Mock, Path: Mock, Rect: Mock };
+});

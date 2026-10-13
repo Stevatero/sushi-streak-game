@@ -7,6 +7,9 @@ export type ThemePreference = 'system' | 'light' | 'dark';
 const KEYS = {
   theme: 'pref_theme',
   sound: 'pref_sound_enabled',
+  haptics: 'pref_haptics_enabled',
+  crashReports: 'pref_crash_reports',
+  pendingCrashReport: 'pending_crash_report',
   playerName: 'playerName',
   legacyServerUrl: 'serverBaseUrl',
 };
@@ -39,6 +42,29 @@ export const preferences = {
     return (await read(KEYS.sound)) !== 'false';
   },
   setSoundEnabled: (enabled: boolean) => write(KEYS.sound, String(enabled)),
+
+  // Vibrazione al tocco dei pulsanti di gioco: attiva di default
+  async getHapticsEnabled(): Promise<boolean> {
+    return (await read(KEYS.haptics)) !== 'false';
+  },
+  setHapticsEnabled: (enabled: boolean) => write(KEYS.haptics, String(enabled)),
+
+  // Segnalazioni di errore al server: solo con il consenso esplicito, disattivate di default
+  async getCrashReportsEnabled(): Promise<boolean> {
+    return (await read(KEYS.crashReports)) === 'true';
+  },
+  setCrashReportsEnabled: (enabled: boolean) => write(KEYS.crashReports, String(enabled)),
+
+  // Errore fatale salvato prima della chiusura dell'app, da inviare al successivo avvio
+  getPendingCrashReport: () => read(KEYS.pendingCrashReport),
+  setPendingCrashReport: (report: string) => write(KEYS.pendingCrashReport, report),
+  async clearPendingCrashReport() {
+    try {
+      await AsyncStorage.removeItem(KEYS.pendingCrashReport);
+    } catch {
+      // ignorato
+    }
+  },
 
   getPlayerName: () => read(KEYS.playerName),
   setPlayerName: (name: string) => write(KEYS.playerName, name),

@@ -7,19 +7,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 import { useColorScheme } from '../theme/ThemeProvider';
 import SoundManager from '../utils/SoundManager';
+import { haptics } from '../utils/haptics';
 import useGameStore from '../store/gameStore';
-import { shareService } from '../services/shareService';
+import { isCrashReportingEnabled, setCrashReportingEnabled } from '../services/crashReporter';
 import { preferences, ThemePreference } from '../services/preferences';
 import { APP_VARIANT, APP_VERSION, PRIVACY_POLICY_URL } from '../config';
 import { logger } from '../utils/logger';
 import { useExclusiveModal } from '../hooks/useExclusiveModal';
 import { fonts, radii, typography, useAppTheme } from '../theme/theme';
-import AppButton from '../components/ui/AppButton';
+import InviteSheet from '../components/InviteSheet';
 import ConfirmSheet, { ConfirmOptions } from '../components/ui/ConfirmSheet';
 import Panel from '../components/ui/Panel';
 import ScreenHeader from '../components/ui/ScreenHeader';
 import SectionTitle from '../components/ui/SectionTitle';
-import Sheet from '../components/ui/Sheet';
 
 type IconName = React.ComponentProps<typeof MaterialCommunityIcons>['name'];
 
@@ -55,12 +55,33 @@ const SettingRow: React.FC<RowProps> = ({ icon, title, subtitle, right, onPress,
   );
 };
 
+// Interruttore nello stile dell'app per le righe delle impostazioni
+const SettingSwitch: React.FC<{ value: boolean; onChange: () => void; label: string }> = ({
+  value,
+  onChange,
+  label,
+}) => {
+  const { colors } = useAppTheme();
+  return (
+    <Switch
+      value={value}
+      onValueChange={onChange}
+      accessibilityLabel={label}
+      thumbColor={value ? colors.primary : colors.surface}
+      trackColor={{ false: colors.outline, true: colors.primaryContainer }}
+      ios_backgroundColor={colors.outline}
+    />
+  );
+};
+
 const SettingsScreen = () => {
   const navigation = useNavigation();
   const { colors } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { preference, setPreference } = useColorScheme();
   const [soundEnabled, setSoundEnabled] = useState(SoundManager.isSoundEnabled());
+  const [hapticsEnabled, setHapticsEnabled] = useState(haptics.isEnabled());
+  const [crashReports, setCrashReports] = useState(isCrashReportingEnabled());
   const { modal, openModal, closeModal } = useExclusiveModal<'share' | 'confirm'>();
   const [dialog, setDialog] = useState<ConfirmOptions | null>(null);
   const [snackbar, setSnackbar] = useState('');
@@ -79,20 +100,6 @@ const SettingsScreen = () => {
   // Con una partita in corso la cancellazione dei dati non impedisce di rientrarvi
   const gameInProgress = !!sessionId && !gameEnded;
 
-  const copySessionCode = async () => {
-    if (!sessionId) return;
-    const success = await shareService.copySessionCode(sessionId);
-    closeModal();
-    setSnackbar(success ? 'Codice sessione copiato!' : 'Impossibile copiare il codice');
-  };
-
-  const shareSessionLink = async () => {
-    if (!sessionId || !sessionName) return;
-    const result = await shareService.shareSession(sessionId, sessionName);
-    closeModal();
-    if (result === 'error') setSnackbar('Impossibile condividere il link');
-  };
-
   const openPrivacyPolicy = async () => {
     try {
       await Linking.openURL(PRIVACY_POLICY_URL);
@@ -108,6 +115,11 @@ const SettingsScreen = () => {
       setPreference('system');
       SoundManager.setSoundEnabled(true);
       setSoundEnabled(true);
+      haptics.setEnabled(true);
+      setHapticsEnabled(true);
+      // Anche il consenso alle segnalazioni di errore torna al valore iniziale (disattivate)
+      setCrashReportingEnabled(false);
+      setCrashReports(false);
       setSnackbar('Dati locali cancellati');
     } catch (error) {
       logger.error('Cancellazione dati locali non riuscita', error);
@@ -120,8 +132,8 @@ const SettingsScreen = () => {
       seal: '消',
       title: 'Cancellare i dati locali?',
       message: gameInProgress
-        ? "Verranno eliminati da questo dispositivo lo storico delle partite, il nome salvato e le preferenze. La partita in corso resta disponibile per rientrare. L'operazione non si può annullare."
-        : "Verranno eliminati da questo dispositivo lo storico delle partite, il nome salvato e le preferenze. L'operazione non si può annullare.",
+        ? "Verranno eliminati da questo dispositivo lo storico delle partite, il nome salvato e le preferenze, compreso il consenso alle segnalazioni di errore. La partita in corso resta disponibile per rientrare. L'operazione non si può annullare."
+        : "Verranno eliminati da questo dispositivo lo storico delle partite, il nome salvato e le preferenze, compreso il consenso alle segnalazioni di errore. L'operazione non si può annullare.",
       confirmLabel: 'Cancella i dati',
       confirmIcon: 'delete-outline',
       destructive: true,
@@ -135,6 +147,20 @@ const SettingsScreen = () => {
     const newState = !soundEnabled;
     setSoundEnabled(newState);
     SoundManager.setSoundEnabled(newState);
+  };
+
+  const toggleHaptics = () => {
+    const newState = !hapticsEnabled;
+    setHapticsEnabled(newState);
+    haptics.setEnabled(newState);
+    if (newState) haptics.piece();
+  };
+
+  const toggleCrashReports = () => {
+    const newState = !crashReports;
+    setCrashReports(newState);
+    setCrashReportingEnabled(newState);
+    setSnackbar(newState ? 'Segnalazioni di errore attivate. Grazie!' : 'Segnalazioni di errore disattivate');
   };
 
   return (
@@ -156,23 +182,22 @@ const SettingsScreen = () => {
             />
           </Panel>
 
-          <SectionTitle label="Audio" kanji="音" />
+          <SectionTitle label="Audio e vibrazione" kanji="音" />
           <Panel style={[styles.panel, styles.listPanel]}>
             <SettingRow
               icon={soundEnabled ? 'volume-high' : 'volume-off'}
               title="Suoni"
               subtitle="Effetti quando aggiungi un pezzo e a fine partita"
               onPress={toggleSound}
-              right={
-                <Switch
-                  value={soundEnabled}
-                  onValueChange={toggleSound}
-                  accessibilityLabel="Suoni"
-                  thumbColor={soundEnabled ? colors.primary : colors.surface}
-                  trackColor={{ false: colors.outline, true: colors.primaryContainer }}
-                  ios_backgroundColor={colors.outline}
-                />
-              }
+              right={<SettingSwitch value={soundEnabled} onChange={toggleSound} label="Suoni" />}
+            />
+            <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />
+            <SettingRow
+              icon={hapticsEnabled ? 'vibrate' : 'vibrate-off'}
+              title="Vibrazione"
+              subtitle="Leggera, quando aggiungi o annulli un pezzo e quando vinci"
+              onPress={toggleHaptics}
+              right={<SettingSwitch value={hapticsEnabled} onChange={toggleHaptics} label="Vibrazione" />}
             />
           </Panel>
 
@@ -204,6 +229,16 @@ const SettingsScreen = () => {
             />
             <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />
             <SettingRow
+              icon="bug-outline"
+              title="Segnalazioni di errore"
+              subtitle="Se qualcosa va storto invia al nostro server versione, sistema ed errore, mai nomi o partite"
+              onPress={toggleCrashReports}
+              right={
+                <SettingSwitch value={crashReports} onChange={toggleCrashReports} label="Segnalazioni di errore" />
+              }
+            />
+            <View style={[styles.divider, { backgroundColor: colors.outlineVariant }]} />
+            <SettingRow
               icon="delete-outline"
               title="Cancella dati locali"
               subtitle="Storico, nome salvato e preferenze"
@@ -231,18 +266,15 @@ const SettingsScreen = () => {
         </View>
       </ScrollView>
 
-      <Sheet visible={modal === 'share'} onClose={closeModal} title="Invita amici" kanji="招待">
-        <View style={[styles.codeBox, { borderColor: colors.outline, backgroundColor: colors.surfaceVariant }]}>
-          <Text style={[typography.label, { color: colors.onSurfaceVariant }]}>Codice</Text>
-          <Text style={[styles.codeText, { color: colors.onSurface }]} selectable>
-            {sessionId}
-          </Text>
-        </View>
-        <View style={styles.sheetButtons}>
-          <AppButton label="Condividi link" icon="share-variant" onPress={shareSessionLink} />
-          <AppButton label="Copia codice" icon="content-copy" variant="tonal" onPress={copySessionCode} />
-        </View>
-      </Sheet>
+      {sessionId ? (
+        <InviteSheet
+          visible={modal === 'share'}
+          onClose={closeModal}
+          sessionId={sessionId}
+          sessionName={sessionName || sessionId}
+          onResult={setSnackbar}
+        />
+      ) : null}
 
       <ConfirmSheet options={modal === 'confirm' ? dialog : null} onClose={closeModal} />
 
@@ -293,23 +325,6 @@ const styles = StyleSheet.create({
   divider: {
     height: StyleSheet.hairlineWidth,
     marginLeft: 62,
-  },
-  codeBox: {
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderRadius: radii.lg,
-    alignItems: 'center',
-    paddingVertical: 18,
-    gap: 4,
-  },
-  codeText: {
-    fontFamily: fonts.black,
-    fontSize: 30,
-    letterSpacing: 4,
-  },
-  sheetButtons: {
-    gap: 10,
-    marginTop: 16,
   },
 });
 

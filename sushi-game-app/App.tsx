@@ -19,7 +19,11 @@ import ErrorBoundary from './src/components/ErrorBoundary';
 import { usePhonePortraitLock } from './src/hooks/usePhonePortraitLock';
 import { ThemeProvider, useColorScheme } from './src/theme/ThemeProvider';
 import { preferences } from './src/services/preferences';
+import { initCrashReporting } from './src/services/crashReporter';
 import { logger } from './src/utils/logger';
+
+// Segnalazioni di errore (solo se l'utente le ha attivate): il gestore va installato prima di tutto
+initCrashReporting().catch(() => undefined);
 
 // Lo splash nativo resta visibile finché font e preferenze non sono pronti
 SplashScreen.preventAutoHideAsync().catch(() => {

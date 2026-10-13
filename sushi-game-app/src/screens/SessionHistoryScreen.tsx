@@ -8,6 +8,9 @@ import { plural } from '../utils/plural';
 import { SessionStorageService, SavedSession } from '../services/sessionStorage';
 import { fonts, radii, typography, useAppTheme } from '../theme/theme';
 import { useExclusiveModal } from '../hooks/useExclusiveModal';
+import { rankOf } from '../utils/ranking';
+import RankBadge from '../components/RankBadge';
+import ResultShareSheet from '../components/ResultShareSheet';
 import AppButton from '../components/ui/AppButton';
 import ConfirmSheet, { ConfirmOptions } from '../components/ui/ConfirmSheet';
 import Hanko from '../components/ui/Hanko';
@@ -26,7 +29,7 @@ const SessionHistoryScreen = () => {
   const [savedSessions, setSavedSessions] = useState<SavedSession[]>([]);
   // La partita selezionata resta impostata anche a finestra chiusa, per la dissolvenza di chiusura
   const [selectedSession, setSelectedSession] = useState<SavedSession | null>(null);
-  const { modal, openModal, closeModal } = useExclusiveModal<'detail' | 'confirm'>();
+  const { modal, openModal, closeModal } = useExclusiveModal<'detail' | 'confirm' | 'result'>();
   const [dialog, setDialog] = useState<ConfirmOptions | null>(null);
   const [snackbar, setSnackbar] = useState('');
   const [loading, setLoading] = useState(true);
@@ -214,31 +217,45 @@ const SessionHistoryScreen = () => {
               data={selectedSession.players}
               keyExtractor={(item) => item.id}
               style={styles.leaderboardList}
-              renderItem={({ item }) => {
-                const rank = 1 + selectedSession.players.filter((p) => p.score > item.score).length;
-                const medal = rank === 1 ? colors.gold : rank === 2 ? colors.silver : rank === 3 ? colors.bronze : null;
-                return (
-                  <View style={styles.playerRow}>
-                    <Hanko
-                      label={String(rank)}
-                      size={28}
-                      shape="circle"
-                      tilt={0}
-                      color={medal ?? colors.surfaceVariant}
-                      textColor={medal ? '#FFFFFF' : colors.onSurfaceVariant}
-                    />
-                    <Text style={[styles.playerName, { color: colors.onSurface }]} numberOfLines={1}>
-                      {item.name}
-                    </Text>
-                    <Text style={[styles.playerScore, { color: colors.onSurface }]}>{item.score}</Text>
-                  </View>
-                );
-              }}
+              renderItem={({ item }) => (
+                <View style={styles.playerRow}>
+                  <RankBadge rank={rankOf(selectedSession.players, item.score)} />
+                  <Text style={[styles.playerName, { color: colors.onSurface }]} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={[styles.playerScore, { color: colors.onSurface }]}>{item.score}</Text>
+                </View>
+              )}
             />
-            <AppButton label="Chiudi" variant="tonal" onPress={closeModal} />
+            <View style={styles.detailButtons}>
+              <AppButton
+                label="Condividi"
+                icon="image-outline"
+                variant="tonal"
+                onPress={() => openModal('result')}
+                style={styles.flex}
+              />
+              <AppButton label="Chiudi" variant="ghost" onPress={closeModal} style={styles.flex} />
+            </View>
           </>
         ) : null}
       </Sheet>
+
+      <ResultShareSheet
+        visible={modal === 'result'}
+        onClose={closeModal}
+        result={
+          selectedSession
+            ? {
+                sessionName: selectedSession.sessionName,
+                dateLabel: SessionStorageService.formatDate(selectedSession.date),
+                restaurant: selectedSession.restaurant,
+                players: selectedSession.players,
+              }
+            : null
+        }
+        onError={setSnackbar}
+      />
 
       <ConfirmSheet options={modal === 'confirm' ? dialog : null} onClose={closeModal} />
 
@@ -349,6 +366,13 @@ const styles = StyleSheet.create({
   leaderboardList: {
     maxHeight: 260,
     marginBottom: 16,
+  },
+  detailButtons: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  flex: {
+    flex: 1,
   },
   playerRow: {
     flexDirection: 'row',

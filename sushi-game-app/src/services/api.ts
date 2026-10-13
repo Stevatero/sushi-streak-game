@@ -1,4 +1,4 @@
-import { API_URL, REQUEST_TIMEOUT_MS } from '../config';
+import { API_URL, APP_VERSION, REQUEST_TIMEOUT_MS } from '../config';
 
 export interface PublicPlayer {
   name: string;
@@ -43,6 +43,11 @@ export class ApiError extends Error {
   get isNetworkError() {
     return this.status === 0;
   }
+
+  // Il server richiede una versione più recente dell'app
+  get isUpgradeRequired() {
+    return this.code === 'upgrade_required';
+  }
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -53,7 +58,8 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   try {
     response = await fetch(`${API_URL}${path}`, {
       ...init,
-      headers: { 'Content-Type': 'application/json', ...(init.headers || {}) },
+      // La versione permette al server di chiedere l'aggiornamento delle app troppo vecchie
+      headers: { 'Content-Type': 'application/json', 'X-App-Version': APP_VERSION, ...(init.headers || {}) },
       signal: controller.signal,
     });
   } catch (err) {
