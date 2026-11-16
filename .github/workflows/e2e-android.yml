@@ -111,6 +111,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             adb install -r "$RUNNER_TEMP/sushi-streak-e2e.apk"
+            adb logcat -G 16M
             adb logcat -c
             maestro test sushi-game-app/e2e/flows --format junit --output "$RUNNER_TEMP/maestro-report.xml" --debug-output "$RUNNER_TEMP/maestro-debug" || { adb logcat -d > "$RUNNER_TEMP/logcat.txt"; adb exec-out screencap -p > "$RUNNER_TEMP/schermo.png"; adb exec-out uiautomator dump /dev/tty > "$RUNNER_TEMP/schermo.xml"; exit 1; }
 
