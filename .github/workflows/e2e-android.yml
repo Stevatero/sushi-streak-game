@@ -112,7 +112,7 @@ jobs:
           script: |
             adb install -r "$RUNNER_TEMP/sushi-streak-e2e.apk"
             adb logcat -c
-            maestro test sushi-game-app/e2e/flows --format junit --output "$RUNNER_TEMP/maestro-report.xml" --debug-output "$RUNNER_TEMP/maestro-debug" || { adb logcat -d > "$RUNNER_TEMP/logcat.txt"; exit 1; }
+            maestro test sushi-game-app/e2e/flows --format junit --output "$RUNNER_TEMP/maestro-report.xml" --debug-output "$RUNNER_TEMP/maestro-debug" || { adb logcat -d > "$RUNNER_TEMP/logcat.txt"; adb exec-out screencap -p > "$RUNNER_TEMP/schermo.png"; adb exec-out uiautomator dump /dev/tty > "$RUNNER_TEMP/schermo.xml"; exit 1; }
 
       - name: Risultati e log
         if: always()
@@ -124,5 +124,8 @@ jobs:
             ${{ runner.temp }}/maestro-debug
             ${{ runner.temp }}/backend.log
             ${{ runner.temp }}/logcat.txt
+            ${{ runner.temp }}/schermo.png
+            ${{ runner.temp }}/schermo.xml
           retention-days: 14
           if-no-files-found: ignore
+          include-hidden-files: true
