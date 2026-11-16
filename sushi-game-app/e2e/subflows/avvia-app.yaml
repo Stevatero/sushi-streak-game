@@ -1,0 +1,20 @@
+# Sottoflusso (non eseguito da solo): apre l'app da zero e attende la home.
+# Sull'emulatore della CI il Pixel Launcher va a volte in ANR (installazione dell'APK, clearState) e il
+# dialogo di sistema "Pixel Launcher isn't responding" copre l'app: se compare si chiude il launcher,
+# che il sistema riavvia.
+appId: com.stevatero.sushistreakapp.preview
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "(Crea partita|.*isn't responding)"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: ".*isn't responding"
+    commands:
+      - tapOn:
+          id: android:id/aerr_close
+- extendedWaitUntil:
+    visible: Crea partita
+    timeout: 30000
