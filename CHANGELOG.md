@@ -7,6 +7,11 @@ La versione si riferisce all'app (`sushi-game-app/package.json`, = `versionName`
 
 ## [Unreleased]
 
+### Sicurezza
+
+- Backend: aggiornati `body-parser` 1.20.9 e `qs` 6.16.2 (avviso high GHSA-27r3-jxmh-p828, blocco del server con un corpo compresso malformato) e `undici` 6.29.1 (usato solo da `node-gyp` per compilare `sqlite3`).
+- App: patch di Expo SDK 57 (`expo` 57.0.33), `node-forge` 1.4.3 (Expo CLI) e `zod` 4.6.7 (ESLint), non inclusi nell'app. Tolte da `audit-allowlist.json` le eccezioni per `braces` e `node-forge`, ormai corretti.
+
 ## [1.8.0] - 2026-10-13
 
 Partite più affidabili al tavolo: pezzi registrati anche senza rete, chiusura della partita da parte di chi la
