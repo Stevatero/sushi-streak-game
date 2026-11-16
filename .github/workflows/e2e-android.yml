@@ -100,6 +100,8 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
 
+      # hide_error_dialogs: i dialoghi "... isn't responding" del sistema (es. Pixel Launcher in ANR dopo
+      # il clearState di Maestro) coprirebbero l'app. Se un flusso fallisce si salvano logcat, schermo e gerarchia
       - name: Test sull'emulatore
         uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
@@ -111,6 +113,7 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             adb install -r "$RUNNER_TEMP/sushi-streak-e2e.apk"
+            adb shell settings put global hide_error_dialogs 1
             adb logcat -G 16M
             adb logcat -c
             maestro test sushi-game-app/e2e/flows --format junit --output "$RUNNER_TEMP/maestro-report.xml" --debug-output "$RUNNER_TEMP/maestro-debug" || { adb logcat -d > "$RUNNER_TEMP/logcat.txt"; adb exec-out screencap -p > "$RUNNER_TEMP/schermo.png"; adb exec-out uiautomator dump /dev/tty > "$RUNNER_TEMP/schermo.xml"; exit 1; }
