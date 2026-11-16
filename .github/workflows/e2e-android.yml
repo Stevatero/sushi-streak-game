@@ -111,7 +111,8 @@ jobs:
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
             adb install -r "$RUNNER_TEMP/sushi-streak-e2e.apk"
-            maestro test sushi-game-app/e2e/flows --format junit --output "$RUNNER_TEMP/maestro-report.xml" --debug-output "$RUNNER_TEMP/maestro-debug"
+            adb logcat -c
+            maestro test sushi-game-app/e2e/flows --format junit --output "$RUNNER_TEMP/maestro-report.xml" --debug-output "$RUNNER_TEMP/maestro-debug" || { adb logcat -d > "$RUNNER_TEMP/logcat.txt"; exit 1; }
 
       - name: Risultati e log
         if: always()
@@ -122,5 +123,6 @@ jobs:
             ${{ runner.temp }}/maestro-report.xml
             ${{ runner.temp }}/maestro-debug
             ${{ runner.temp }}/backend.log
+            ${{ runner.temp }}/logcat.txt
           retention-days: 14
           if-no-files-found: ignore
