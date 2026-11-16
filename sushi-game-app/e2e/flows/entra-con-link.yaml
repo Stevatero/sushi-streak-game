@@ -10,11 +10,7 @@ env:
       ACTION: create
       SESSION: E2E-LINK
       NAME: Host
-- launchApp:
-    clearState: true
-- extendedWaitUntil:
-    visible: Crea partita
-    timeout: 30000
+- runFlow: ../subflows/avvia-app.yaml
 - openLink: sushi-streak-preview://join/E2E-LINK
 - extendedWaitUntil:
     visible: Entra in partita

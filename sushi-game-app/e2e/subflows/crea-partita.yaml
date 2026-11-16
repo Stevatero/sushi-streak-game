@@ -1,11 +1,7 @@
 # Sottoflusso (non eseguito da solo): apre l'app da zero e crea una partita. Variabili: NAME, SESSION
 appId: com.stevatero.sushistreakapp.preview
 ---
-- launchApp:
-    clearState: true
-- extendedWaitUntil:
-    visible: Crea partita
-    timeout: 30000
+- runFlow: avvia-app.yaml
 - tapOn:
     id: player-name
 - inputText: ${NAME}
